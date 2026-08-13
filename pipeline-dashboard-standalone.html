@@ -1,0 +1,965 @@
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.2.0/chartjs-plugin-datalabels.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<style>
+  :root {
+    --bg: #1c1e26;
+    --surface: #23252f;
+    --surface-2: #2b2d39;
+    --border: #383b4a;
+    --text: #f0f0f0;
+    --text-muted: #939aad;
+    --won: #2bd98a;
+    --open: #ffc15e;
+    --lost: #f23740;
+    --accent: #f23740;
+  }
+  * { box-sizing: border-box; }
+  #pdash {
+    font-family: 'Barlow', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 26px;
+    border-radius: 16px;
+    min-height: 100vh;
+  }
+  #pdash h1, #pdash h2, #pdash .num { font-family: 'Barlow', sans-serif; font-weight: 600; }
+  #pdash * { margin: 0; }
+
+  .pdash-header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 16px; margin-bottom: 20px; }
+  .pdash-title { font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
+  .pdash-status-wrap { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; }
+  .pdash-status { font-size: 12px; padding: 5px 10px; border-radius: 20px; background: var(--surface-2); border: 1px solid var(--border); color: var(--text-muted); display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .pdash-file-info { font-size: 11.5px; color: var(--text-muted); text-align: right; max-width: 260px; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--open); }
+  .dot.live { background: var(--won); }
+
+  .pdash-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .pdash-controls select, .pdash-controls input[type=text] {
+    background: var(--surface); border: 1px solid var(--border); color: var(--text);
+    font-family: inherit; font-size: 13px; padding: 7px 10px; border-radius: 8px; outline: none;
+  }
+  .pdash-controls select:focus, .pdash-controls input:focus { border-color: var(--accent); }
+  .btn { background: var(--accent); color: #ffffff; border: none; font-family: inherit; font-weight: 600; font-size: 13px; padding: 8px 14px; border-radius: 8px; cursor: pointer; }
+  .btn:hover { opacity: 0.9; }
+  .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--text-muted); }
+  .btn-ghost:hover { color: var(--text); border-color: var(--text-muted); }
+
+  .section-title { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); margin: 24px 0 16px; padding-top: 20px; border-top: 1px solid var(--border); }
+  .section-title:first-of-type { border-top: none; padding-top: 0; }
+
+  .kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 20px; }
+  .kpi-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 15px 16px; }
+  .kpi-label { font-size: 11.5px; color: var(--text-muted); }
+  .kpi-num { font-size: 22px; font-weight: 700; margin-top: 6px; }
+  .kpi-delta { font-size: 11.5px; margin-top: 4px; color: var(--text-muted); }
+
+  .grid-2 { display: grid; grid-template-columns: 1.3fr 1fr; gap: 20px; margin-bottom: 20px; }
+  .cards-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-bottom: 20px; }
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+  .panel h2 { font-size: 13.5px; font-weight: 600; margin-bottom: 14px; }
+  #pdash canvas { display: block; margin-top: 4px; }
+  .pie-panel { display: flex; align-items: center; gap: 18px; }
+  .pie-wrap { max-width: 165px; flex-shrink: 0; width: 100%; }
+  .legend-vertical { display: flex; flex-direction: column; gap: 9px; flex: 1; min-width: 0; }
+  .legend-vertical .legend-item { white-space: normal; }
+
+  .funnel-row { display: flex; align-items: center; gap: 10px; margin-bottom: 9px; }
+  .funnel-bar-wrap { flex: 1; height: 30px; background: var(--surface-2); border-radius: 7px; overflow: hidden; }
+  .funnel-bar { height: 100%; background: var(--accent); border-radius: 7px; display: flex; align-items: center; padding-left: 10px; font-size: 12px; font-weight: 600; color: #ffffff; white-space: nowrap; transition: width 0.4s ease; }
+  .funnel-label { width: 130px; font-size: 12px; color: var(--text-muted); flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .legend { display: flex; gap: 14px; margin-top: 12px; flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); }
+  .legend-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+
+  #pdash table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  #pdash th { text-align: left; color: var(--text-muted); font-weight: 500; padding: 8px 10px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--surface); }
+  #pdash td { padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--text-muted); }
+  tr:hover td { background: var(--surface-2); }
+  tfoot td { font-weight: 600; border-top: 1px solid var(--border); border-bottom: none; }
+  .table-wrap { max-height: 340px; overflow-y: auto; }
+  .badge { padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+  .badge.Ganho { background: rgba(43,217,165,0.15); color: var(--won); }
+  .badge.Aberto { background: rgba(255,193,94,0.15); color: var(--open); }
+  .badge.Perdido { background: rgba(255,107,107,0.15); color: var(--lost); }
+
+  .config-panel { margin-top: 6px; }
+  .config-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .config-row input { flex: 1; min-width: 240px; }
+  .hint { font-size: 12px; color: var(--text-muted); margin-top: 8px; line-height: 1.5; }
+  .error-box { background: rgba(255,107,107,0.1); border: 1px solid rgba(255,107,107,0.3); color: var(--lost); border-radius: 8px; padding: 10px 12px; font-size: 12.5px; margin-top: 10px; }
+
+  @media (max-width: 1000px) {
+    .kpi-row { grid-template-columns: repeat(3, 1fr); }
+    .grid-2 { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 560px) {
+    .kpi-row { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+
+<div id="pdash">
+  <div class="pdash-header">
+    <div>
+      <div class="pdash-title">Relatório de Leads</div>
+    </div>
+    <div class="pdash-controls">
+      <select id="f-period"><option value="all">Todos os períodos</option></select>
+      <select id="f-owner"><option value="">Todos os responsáveis</option></select>
+      <select id="f-etapa"><option value="">Todas as etapas</option></select>
+      <select id="f-qualidade" style="display:none"><option value="">Qualidade: todas</option></select>
+      <select id="f-origem" style="display:none"><option value="">Origem: todas</option></select>
+      <select id="f-ecommerce" style="display:none"><option value="">E-commerce: todos</option></select>
+      <button class="btn-ghost btn" id="btn-refresh" title="Recarregar dados">↻</button>
+      <div class="pdash-status-wrap">
+        <span class="pdash-status" id="pdash-status"><span class="dot" id="pdash-dot"></span><span id="pdash-status-text">dados de exemplo</span></span>
+        <div class="pdash-file-info" id="pdash-file-info"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="kpi-row" id="kpi-row"></div>
+
+  <div class="section-title">Volume de leads</div>
+  <div class="grid-2">
+    <div class="panel">
+      <h2>Leads por dia</h2>
+      <canvas id="chart-leads-dia" height="105"></canvas>
+    </div>
+    <div class="panel">
+      <h2>Origem dos leads</h2>
+      <div id="origem-panel"></div>
+    </div>
+  </div>
+  <div class="grid-2">
+    <div class="panel">
+      <h2>Dia da semana × origem</h2>
+      <div id="chart-weekday-origem-wrap"><canvas id="chart-weekday-origem" height="105"></canvas></div>
+    </div>
+    <div class="panel">
+      <h2>Leads por semana — total vs. superior</h2>
+      <canvas id="chart-weekly" height="105"></canvas>
+    </div>
+  </div>
+  <div class="panel" style="margin-bottom:20px">
+    <h2>Comparativo com o período anterior</h2>
+    <canvas id="chart-comparativo" height="40"></canvas>
+  </div>
+
+  <div class="section-title">Pipedrive — funil e motivos</div>
+  <div class="grid-2">
+    <div class="panel">
+      <h2>Status por etapa</h2>
+      <div class="pie-panel">
+        <div class="pie-wrap"><canvas id="chart-status-etapa" height="130"></canvas></div>
+        <div class="legend legend-vertical" id="status-etapa-legend"></div>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Motivo da perda</h2>
+      <div class="pie-panel">
+        <div class="pie-wrap"><canvas id="chart-motivo-perda" height="130"></canvas></div>
+        <div class="legend legend-vertical" id="motivo-legend"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">Qualificação de leads</div>
+  <div class="cards-grid" id="extra-cards"></div>
+
+  <div class="panel" style="margin-bottom:20px">
+    <h2 id="table-title">Negócios</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Título</th><th>Responsável</th><th>Etapa</th><th>Status</th><th>Valor</th><th>Criado em</th></tr></thead>
+        <tbody id="table-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="panel config-panel" id="config-panel">
+    <h2>Carregar dados</h2>
+    <div class="config-row">
+      <label class="btn" id="btn-upload-label" for="file-upload" style="cursor:pointer">Escolher arquivo (.xlsx ou .csv)</label>
+      <input type="file" id="file-upload" accept=".xlsx,.xls,.csv" style="display:none">
+      <span class="hint" id="file-name" style="margin:0"></span>
+      <button class="btn-ghost btn" id="btn-reset">Voltar ao instantâneo</button>
+    </div>
+    <div class="hint">
+      Este arquivo é um <strong>instantâneo estático</strong>: os dados acima já vêm embutidos, sem depender de nenhum servidor. Subir um arquivo aqui só atualiza a visualização no seu navegador, agora — não muda o que outras pessoas veem.<br>
+      Para atualizar o relatório publicado pra todo mundo: exporte um novo arquivo do Pipedrive (Negócios → Exportar) e peça uma nova versão deste HTML. Depois é só substituir o arquivo no seu site/hospedagem.
+    </div>
+    <div id="config-error"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  try { if (window.ChartDataLabels) Chart.register(window.ChartDataLabels); } catch (e) { /* plugin não carregou, segue sem rótulos */ }
+
+  // Instantâneo dos dados no momento em que este arquivo foi gerado.
+  // Para atualizar, gere um novo export do Pipedrive e peça uma nova versão deste arquivo.
+  const EMBEDDED_SNAPSHOT_DATA = [{"Título":"Negócio João de Castro-C4","Etapa":"Contato","Origem MKT":"Site JET","Lista":"Whatsapp","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem orçamento","Data de criação":"2025-12-02","Faturamento MKT":"Maior que 80M ano","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":0,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2025-12-02","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"","Segmento":"Não identificado","Qtd Lojas Físicas":"","E-mail - Trabalho":"","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Momentos Personalizados-C4","Etapa":"Contato","Origem MKT":"Botão Whatsapp","Lista":"Whatsapp","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem orçamento","Data de criação":"2025-12-03","Faturamento MKT":"Maior que 80M ano","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":10000,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2025-12-03","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"","Segmento":"Outros","Qtd Lojas Físicas":"","E-mail - Trabalho":"","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Christina Murad-C4","Etapa":"Contato","Origem MKT":"Mídia Paga","Lista":"Google","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem orçamento","Data de criação":"2025-12-03","Faturamento MKT":"Entre 30M e 50M ano","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":10000,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2025-12-03","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"","Segmento":"Não identificado","Qtd Lojas Físicas":"","E-mail - Trabalho":"tinamurad@gmail.com","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Gil Embalagens-C4","Etapa":"Lead","Origem MKT":"Mídia Paga","Lista":"Google","Criado por":"Bárbara Lima","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem Contato","Data de criação":"2025-12-06","Faturamento MKT":"Entre 30M e 50M ano","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":0,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2025-12-11","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"","Segmento":"Embalagens","Qtd Lojas Físicas":2,"E-mail - Trabalho":"gilembalagens@gmail.com","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Cris Celulares-C4","Etapa":"Contato","Origem MKT":"Site JET","Lista":"Case | Deco","Criado por":"Bárbara Lima","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem orçamento","Data de criação":"2025-12-07","Faturamento MKT":"Menor que 30M ano","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":0,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2025-12-10","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"","Segmento":"Outros","Qtd Lojas Físicas":0,"E-mail - Trabalho":"winchrisbrasil@gmail.com","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Agro Ferragens Luizão-C2","Etapa":"Diagnóstico","Origem MKT":"Mídia Paga","Lista":"Google","Criado por":"Bárbara Lima","Responsável":"Rodrigo Amaral","Motivo da Perda":"Sem Contato","Data de criação":"2025-12-08","Faturamento MKT":"Entre 30M e 50M ano","Status":"Perdido","Já possui e-commerce":"Sim","Plataforma Atual":"Magazord","Faturamento Mensal Loja Online":60000,"Faturamento Marketplace":0,"Faturamento Anual":100000000,"Qualidade Lead":"Superior","% Mensalidade":"1500","Data da última atividade":"2026-01-21","Valor Setup":"","Valor":2500,"Data de fechamento":"","Website":"https://www.luizao.com.br/","Segmento":"Ferramentas","Qtd Lojas Físicas":4,"E-mail - Trabalho":"marketing@luizao.com.br","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Simone Maria Felder-C4","Etapa":"Contato","Origem MKT":"Mídia Paga","Lista":"Google","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem orçamento","Data de criação":"2025-12-08","Faturamento MKT":"Maior que 80M ano","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":1000,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2025-12-08","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"","Segmento":"Outros","Qtd Lojas Físicas":"","E-mail - Trabalho":"simoneauera@gmail.com","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio André Coimbra-C3","Etapa":"Contato","Origem MKT":"Telefone","Lista":"Telefone","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Não consegui qualificar","Data de criação":"2025-12-10","Faturamento MKT":"Maior que 80M ano","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":1000,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2025-12-10","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"","Segmento":"Saúde e Beleza","Qtd Lojas Físicas":"","E-mail - Trabalho":"","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Fábio da costa Albuquerque-C4","Etapa":"Contato","Origem MKT":"Site JET","Lista":"Tráfego Direto","Criado por":"Bárbara Lima","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem Aderência","Data de criação":"2025-12-13","Faturamento MKT":"","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":0,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2025-12-15","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"","Segmento":"Não identificado","Qtd Lojas Físicas":0,"E-mail - Trabalho":"fdcalbuquerque@gmail.com","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Gleise Tricot-C3","Etapa":"Contato","Origem MKT":"Site JET","Lista":"Tráfego Direto","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem orçamento","Data de criação":"2025-12-15","Faturamento MKT":"Maior que 80M ano","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":1000,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2025-12-15","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"","Segmento":"Moda e Acessórios","Qtd Lojas Físicas":"","E-mail - Trabalho":"gleisetricot@hotmail.com","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Dataro Sports-C2","Etapa":"Diagnóstico","Origem MKT":"Google","Lista":"Tráfego Direto","Criado por":"Teselane Oliveira","Responsável":"Rodrigo Amaral","Motivo da Perda":"Sem interesse - Ramper","Data de criação":"2025-12-16","Faturamento MKT":"Menor que 30M ano","Status":"Perdido","Já possui e-commerce":"Sim","Plataforma Atual":"Tray Varejo","Faturamento Mensal Loja Online":80000,"Faturamento Marketplace":0,"Faturamento Anual":81000,"Qualidade Lead":"Superior","% Mensalidade":"1%","Data da última atividade":"2026-01-14","Valor Setup":"6.000","Valor":2500,"Data de fechamento":"","Website":"https://www.datarosports.com.br/","Segmento":"Artigos Esportivos","Qtd Lojas Físicas":1,"E-mail - Trabalho":"beatriz.rengel@datarosports.com.br","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Liv Têxtil-C3","Etapa":"Oportunidade","Origem MKT":"Site JET","Lista":"Tráfego Direto","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Não enxergou valor","Data de criação":"2025-12-17","Faturamento MKT":"Maior que 80M ano","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":0,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2026-01-16","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"","Segmento":"Moda e Acessórios","Qtd Lojas Físicas":"","E-mail - Trabalho":"livtextil@gmail.com","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Soc Store-C2","Etapa":"Contato","Origem MKT":"Site JET","Lista":"Case | Senior Store","Criado por":"Teselane Oliveira","Responsável":"Rodrigo Amaral","Motivo da Perda":"","Data de criação":"2025-12-17","Faturamento MKT":"Maior que 80M ano","Status":"Aberto","Já possui e-commerce":"Sim","Plataforma Atual":"Flexy","Faturamento Mensal Loja Online":40000,"Faturamento Marketplace":0,"Faturamento Anual":480000,"Qualidade Lead":"Inferior","% Mensalidade":"2%","Data da última atividade":"2026-07-01","Valor Setup":"+ 35.000","Valor":3500,"Data de fechamento":"","Website":"https://socstore.com.br/","Segmento":"Outros","Qtd Lojas Físicas":"","E-mail - Trabalho":"ingrid.barbosa@soc.com.br","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Adriane- C3","Etapa":"Contato","Origem MKT":"Mídia Paga","Lista":"Google","Criado por":"Bianca Lourenço","Responsável":"Bianca Lourenço","Motivo da Perda":"Sem orçamento","Data de criação":"2025-12-29","Faturamento MKT":"Maior que 80M ano","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":0,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2025-12-26","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"Não tem","Segmento":"Moda e Acessórios","Qtd Lojas Físicas":"","E-mail - Trabalho":"","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio BMJ Auto Peças- C4","Etapa":"Contato","Origem MKT":"Site JET","Lista":"Tráfego Direto","Criado por":"Bianca Lourenço","Responsável":"Bianca Lourenço","Motivo da Perda":"Sem orçamento","Data de criação":"2025-12-29","Faturamento MKT":"Entre 30M e 50M ano","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":0,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2025-12-26","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"","Segmento":"Auto","Qtd Lojas Físicas":1,"E-mail - Trabalho":"","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Ideal Modas- C3","Etapa":"Contato","Origem MKT":"Site JET","Lista":"Tráfego Direto","Criado por":"Bianca Lourenço","Responsável":"Bianca Lourenço","Motivo da Perda":"Sem orçamento","Data de criação":"2025-12-30","Faturamento MKT":"Maior que 80M ano","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":0,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2025-12-30","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"Não tem","Segmento":"Moda e Acessórios","Qtd Lojas Físicas":1,"E-mail - Trabalho":"fabianaegg2@gmail.com","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Tracan Máquinas e Sistemas-C4","Etapa":"Negociação  +30","Origem MKT":"Telefone","Lista":"Telefone","Criado por":"Teselane Oliveira","Responsável":"Guilherme Lunardi","Motivo da Perda":"Sem Aderência","Data de criação":"2026-01-06","Faturamento MKT":"","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":1000000000,"Qualidade Lead":"Superior","% Mensalidade":"3%","Data da última atividade":"2026-07-10","Valor Setup":"+ 35.000","Valor":2500,"Data de fechamento":"","Website":"https://tracan.com.br/","Segmento":"Agronegócios","Qtd Lojas Físicas":12,"E-mail - Trabalho":"carlos.ribeiro@tracan.com.br","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Full Turbos-T1","Etapa":"Apresentação","Origem MKT":"Site JET","Lista":"Tráfego Direto","Criado por":"Bárbara Lima","Responsável":"Guilherme Lunardi","Motivo da Perda":"","Data de criação":"2026-01-08","Faturamento MKT":"","Status":"Aberto","Já possui e-commerce":"Sim","Plataforma Atual":"Bis2Bis","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":6000000,"Faturamento Anual":72000000,"Qualidade Lead":"Superior","% Mensalidade":"1%","Data da última atividade":"2026-08-10","Valor Setup":"1.500","Valor":5000,"Data de fechamento":"","Website":"https://www.fullturbos.com.br/","Segmento":"Auto","Qtd Lojas Físicas":1,"E-mail - Trabalho":"marketing@fullturbos.com.br","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Líder Alimentos Brasil-C4","Etapa":"Contato","Origem MKT":"Mídia Paga","Lista":"Google","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Não consegui qualificar","Data de criação":"2026-01-08","Faturamento MKT":"","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":300000000,"Qualidade Lead":"Superior","% Mensalidade":"","Data da última atividade":"2026-02-25","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"https://www.lideralimentos.com.br/","Segmento":"Alimentos e Bebidas","Qtd Lojas Físicas":0,"E-mail - Trabalho":"larissa.santos@lideralimentos.com.br","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Jaqueline Vieira da Costa-C3","Etapa":"Contato","Origem MKT":"Mídia Paga","Lista":"Google","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem orçamento","Data de criação":"2026-01-09","Faturamento MKT":"Maior que 80M ano","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":0,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2026-01-12","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"","Segmento":"Moda e Acessórios","Qtd Lojas Físicas":"","E-mail - Trabalho":"jackmeefmaeefilha@gmail.com","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Congelados da Sônia-C2","Etapa":"Fechamento","Origem MKT":"Botão Whatsapp","Lista":"Omie Store","Criado por":"Teselane Oliveira","Responsável":"Rodrigo Amaral","Motivo da Perda":"","Data de criação":"2026-01-13","Faturamento MKT":"Entre 30M e 50M ano","Status":"Ganho","Já possui e-commerce":"Sim","Plataforma Atual":"Outros","Faturamento Mensal Loja Online":600000,"Faturamento Marketplace":0,"Faturamento Anual":25000000,"Qualidade Lead":"Superior","% Mensalidade":"3500","Data da última atividade":"2026-01-23","Valor Setup":"10.000","Valor":3500,"Data de fechamento":"2026-01-23","Website":"https://congeladosdasonia.com.br/","Segmento":"Alimentos e Bebidas","Qtd Lojas Físicas":"","E-mail - Trabalho":"adriana@congeladosdasonia.com.br, leomoraes.mkt@gmail.com, rodrigo@avafly.com.br, darllene@focusbpo.com.br","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Ivana Calçados e Acessórios-C3","Etapa":"Contato","Origem MKT":"Site JET","Lista":"Tráfego Direto","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem orçamento","Data de criação":"2026-01-13","Faturamento MKT":"Maior que 80M ano","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":1000,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2026-01-13","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"","Segmento":"Moda e Acessórios","Qtd Lojas Físicas":1,"E-mail - Trabalho":"ivanafaleiros@gmail.com","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Grupo Mevos-C4","Etapa":"Diagnóstico","Origem MKT":"Site JET","Lista":"Tráfego Direto","Criado por":"Bárbara Lima","Responsável":"Derek Fonseca","Motivo da Perda":"Sem Aderência","Data de criação":"2026-01-14","Faturamento MKT":"","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":300000000,"Qualidade Lead":"Superior","% Mensalidade":"","Data da última atividade":"2026-06-22","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"https://mevos.com.br/","Segmento":"Auto","Qtd Lojas Físicas":2,"E-mail - Trabalho":"gisele.alves@mevos.com.br, patricia.moreira@mevos.com.br, gustavo.vieira@viadiesel.com.br, kawan.silva@viadiesel.com.br, carlos.espinola@viadiesel.com.br, andrey.medeiros@mevos.com.br","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Alcamar-C2","Etapa":"Oportunidade","Origem MKT":"Site JET","Lista":"Tráfego Direto","Criado por":"Teselane Oliveira","Responsável":"Guilherme Lunardi","Motivo da Perda":"Sem orçamento","Data de criação":"2026-01-14","Faturamento MKT":"","Status":"Perdido","Já possui e-commerce":"Sim","Plataforma Atual":"Tray Varejo","Faturamento Mensal Loja Online":1000000,"Faturamento Marketplace":0,"Faturamento Anual":12000000,"Qualidade Lead":"Superior","% Mensalidade":"1","Data da última atividade":"2026-07-22","Valor Setup":"30.000","Valor":3500,"Data de fechamento":"","Website":"https://www.alcamar.com.br/","Segmento":"Outros","Qtd Lojas Físicas":1,"E-mail - Trabalho":"marketing2@alcamar.com.br","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio EPX Capacitores-C4","Etapa":"Apresentação","Origem MKT":"Mídia Paga","Lista":"Google","Criado por":"Bárbara Lima","Responsável":"Rodrigo Amaral","Motivo da Perda":"Sem orçamento","Data de criação":"2026-01-15","Faturamento MKT":"Menor que 30M ano","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":360000,"Qualidade Lead":"Inferior","% Mensalidade":"1,5","Data da última atividade":"2026-02-11","Valor Setup":"30.000","Valor":3500,"Data de fechamento":"","Website":"https://www.epxcapacitores.com.br/","Segmento":"Outros","Qtd Lojas Físicas":0,"E-mail - Trabalho":"diretoria@epxcapacitores.com.br","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Magazine Brás-C1","Etapa":"Diagnóstico","Origem MKT":"Site JET","Lista":"Chatbot","Criado por":"Bárbara Lima","Responsável":"Rodrigo Amaral","Motivo da Perda":"Sem Contato","Data de criação":"2026-01-15","Faturamento MKT":"Entre 30M e 50M ano","Status":"Perdido","Já possui e-commerce":"Sim","Plataforma Atual":"Tray Varejo","Faturamento Mensal Loja Online":20000,"Faturamento Marketplace":150000,"Faturamento Anual":380000,"Qualidade Lead":"Superior","% Mensalidade":"1.5%","Data da última atividade":"2026-04-24","Valor Setup":"15.000","Valor":2500,"Data de fechamento":"","Website":"https://www.magazinebras.com.br/","Segmento":"Casa e Decoração","Qtd Lojas Físicas":2,"E-mail - Trabalho":"contato@magazinebras.com.br","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Alucel-C2","Etapa":"Fechamento","Origem MKT":"Site JET","Lista":"Case | PJ Neblina","Criado por":"Bárbara Lima","Responsável":"Guilherme Lunardi","Motivo da Perda":"","Data de criação":"2026-01-16","Faturamento MKT":"","Status":"Ganho","Já possui e-commerce":"Sim","Plataforma Atual":"Loja Integrada","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":100000000,"Qualidade Lead":"Superior","% Mensalidade":"Faixa de Faturamento","Data da última atividade":"2026-02-03","Valor Setup":"24.000","Valor":4000,"Data de fechamento":"2026-01-30","Website":"https://www.alucel.net/","Segmento":"Materiais Elétricos","Qtd Lojas Físicas":2,"E-mail - Trabalho":"debora@alucel.net","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio São Jorge Shopping da Construção-C4","Etapa":"Apresentação","Origem MKT":"Site JET","Lista":"Orgânico","Criado por":"Bárbara Lima","Responsável":"Rodrigo Amaral","Motivo da Perda":"Projeto foi adiado","Data de criação":"2026-01-19","Faturamento MKT":"","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":30000000,"Qualidade Lead":"Superior","% Mensalidade":"2","Data da última atividade":"2026-02-12","Valor Setup":"30.000","Valor":3500,"Data de fechamento":"","Website":"https://saojorgeshopping.com.br/","Segmento":"Construção","Qtd Lojas Físicas":7,"E-mail - Trabalho":"alessandroadorno@saojorgeshopping.com.br","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio JGA Teclados de Membranas -C4","Etapa":"Contato","Origem MKT":"Mídia Paga","Lista":"Google","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem orçamento","Data de criação":"2026-01-21","Faturamento MKT":"Maior que 80M ano","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":0,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2026-01-21","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"","Segmento":"Não identificado","Qtd Lojas Físicas":"","E-mail - Trabalho":"ortoclinmembranas@outlook.com","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Grão Brasil-C4","Etapa":"Oportunidade","Origem MKT":"Site JET","Lista":"Ligação","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem orçamento","Data de criação":"2026-01-22","Faturamento MKT":"","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":0,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2026-01-22","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"https://www.graobrazil.agr.br/","Segmento":"Alimentos e Bebidas","Qtd Lojas Físicas":0,"E-mail - Trabalho":"","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Biostévi Pharma-C1","Etapa":"Apresentação","Origem MKT":"Mídia Paga","Lista":"Google","Criado por":"Bárbara Lima","Responsável":"Guilherme Lunardi","Motivo da Perda":"Projeto foi adiado","Data de criação":"2026-01-22","Faturamento MKT":"","Status":"Perdido","Já possui e-commerce":"Sim","Plataforma Atual":"Vtex","Faturamento Mensal Loja Online":650000,"Faturamento Marketplace":0,"Faturamento Anual":81000,"Qualidade Lead":"Superior","% Mensalidade":"2","Data da última atividade":"2026-02-23","Valor Setup":"","Valor":3500,"Data de fechamento":"","Website":"https://www.biostevi.com.br/","Segmento":"Saúde e Beleza","Qtd Lojas Físicas":2,"E-mail - Trabalho":"mkt10@biostevi.com.br, mkt8@biostevi.com.br","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Tubos Oliveira-C4","Etapa":"Apresentação","Origem MKT":"Site JET","Lista":"Tráfego Direto","Criado por":"Teselane Oliveira","Responsável":"Vitor Martoni","Motivo da Perda":"Não enxergou valor","Data de criação":"2026-01-26","Faturamento MKT":"","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":100000000,"Qualidade Lead":"Superior","% Mensalidade":"","Data da última atividade":"2026-03-12","Valor Setup":"","Valor":3500,"Data de fechamento":"","Website":"https://tubosoliveira.com.br/","Segmento":"Construção","Qtd Lojas Físicas":2,"E-mail - Trabalho":"gabriela@tubosoliveira.com.br","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Drogaria Retiro-C1","Etapa":"Negociação  +30","Origem MKT":"Site JET","Lista":"Case | Drogão Super","Criado por":"Teselane Oliveira","Responsável":"Guilherme Lunardi","Motivo da Perda":"Funcionalidades","Data de criação":"2026-01-26","Faturamento MKT":"","Status":"Perdido","Já possui e-commerce":"Sim","Plataforma Atual":"Magazord","Faturamento Mensal Loja Online":10000,"Faturamento Marketplace":0,"Faturamento Anual":300000000,"Qualidade Lead":"Superior","% Mensalidade":"","Data da última atividade":"2026-03-04","Valor Setup":"","Valor":3500,"Data de fechamento":"","Website":"https://www.drogariaretiro.com.br/","Segmento":"Saúde e Beleza","Qtd Lojas Físicas":49,"E-mail - Trabalho":"daniele@rederetiro.com.br, ronieri@rederetiro.com.br","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Amanda Pinheiro-C1","Etapa":"Contato","Origem MKT":"Mídia Paga","Lista":"Google","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem orçamento","Data de criação":"2026-01-26","Faturamento MKT":"Maior que 80M ano","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":0,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2026-01-27","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"","Segmento":"Moda e Acessórios","Qtd Lojas Físicas":"","E-mail - Trabalho":"amanda.aroucha@hotmail.com","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Grupo Kolplast-C1","Etapa":"Negociação  +30","Origem MKT":"E-mail Mktg","Lista":"E-book | Sucesso com a JET","Criado por":"Teselane Oliveira","Responsável":"Guilherme Lunardi","Motivo da Perda":"Projeto foi adiado","Data de criação":"2026-01-27","Faturamento MKT":"","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Vtex","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":100000000,"Qualidade Lead":"Superior","% Mensalidade":"","Data da última atividade":"2026-07-20","Valor Setup":"+ 35.000","Valor":5000,"Data de fechamento":"","Website":"https://loja.kolplast.com.br/","Segmento":"Saúde e Beleza","Qtd Lojas Físicas":0,"E-mail - Trabalho":"lucio.inacio@kolplast.com.br","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Coverti Tintas do Brasil-C4","Etapa":"Diagnóstico","Origem MKT":"Mídia Paga","Lista":"Google","Criado por":"Teselane Oliveira","Responsável":"Rodrigo Amaral","Motivo da Perda":"Sem orçamento","Data de criação":"2026-01-28","Faturamento MKT":"Entre 30M e 50M ano","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":100000,"Faturamento Anual":100000000,"Qualidade Lead":"Inferior","% Mensalidade":"3500","Data da última atividade":"2026-03-12","Valor Setup":"15.000","Valor":3500,"Data de fechamento":"","Website":"https://coverti.com.br/","Segmento":"Outros","Qtd Lojas Físicas":0,"E-mail - Trabalho":"higor_padua@hotmail.com","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio B.lotti Movimentação de Cargas-C4","Etapa":"Contato","Origem MKT":"Mídia Paga","Lista":"Google","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Não consegui qualificar","Data de criação":"2026-02-02","Faturamento MKT":"","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Outros","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":360000,"Qualidade Lead":"Superior","% Mensalidade":"","Data da última atividade":"2026-03-04","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"https://www.blottionline.com.br/","Segmento":"Outros","Qtd Lojas Físicas":"","E-mail - Trabalho":"lucimar@blotti.com.br","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Grupo Quatro K Têxtil-C3","Etapa":"Diagnóstico","Origem MKT":"Site JET","Lista":"Tráfego Direto","Criado por":"Teselane Oliveira","Responsável":"Vitor Martoni","Motivo da Perda":"Sem Aderência","Data de criação":"2026-02-02","Faturamento MKT":"","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Wordpress","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":100000000,"Qualidade Lead":"Superior","% Mensalidade":"","Data da última atividade":"2026-02-02","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"https://quatrok.com.br/","Segmento":"Outros","Qtd Lojas Físicas":3,"E-mail - Trabalho":"caio.mathias@quatrok.com.br, ranzi.lais@quatrok.com.br","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Eder- Peças de caminhão-C4","Etapa":"Contato","Origem MKT":"Botão Whatsapp","Lista":"Tráfego Direto","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem orçamento","Data de criação":"2026-02-02","Faturamento MKT":"Maior que 80M ano","Status":"Perdido","Já possui e-commerce":"","Plataforma Atual":"","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":0,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2026-02-05","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"","Segmento":"","Qtd Lojas Físicas":"","E-mail - Trabalho":"","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Abastece Componentes Elétricos-C2","Etapa":"Oportunidade","Origem MKT":"Telefone","Lista":"Ramper","Criado por":"Teselane Oliveira","Responsável":"Vitor Martoni","Motivo da Perda":"Projeto foi adiado","Data de criação":"2026-02-02","Faturamento MKT":"Entre 30M e 50M ano","Status":"Perdido","Já possui e-commerce":"Sim","Plataforma Atual":"Shopify","Faturamento Mensal Loja Online":400000,"Faturamento Marketplace":0,"Faturamento Anual":360000,"Qualidade Lead":"Superior","% Mensalidade":"","Data da última atividade":"2026-07-13","Valor Setup":"","Valor":4000,"Data de fechamento":"","Website":"https://www.abastece.com.br/","Segmento":"Materiais Elétricos","Qtd Lojas Físicas":0,"E-mail - Trabalho":"adm@abastece.com.br, midia@abastece.com.br, raphael.silva@abastece.com.br","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Onbio Indústria-C4","Etapa":"Contato","Origem MKT":"Site JET","Lista":"Tráfego Direto","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem orçamento","Data de criação":"2026-02-02","Faturamento MKT":"Maior que 80M ano","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":81000,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2026-02-04","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"https://www.onbio.eco.br/","Segmento":"Outros","Qtd Lojas Físicas":0,"E-mail - Trabalho":"contato@onbio.eco.br","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Grupo Mega Descartáveis-C2","Etapa":"Negociação  +30","Origem MKT":"Site JET","Lista":"Case | Multicaixas","Criado por":"Teselane Oliveira","Responsável":"Rodrigo Amaral","Motivo da Perda":"No-show","Data de criação":"2026-02-03","Faturamento MKT":"Menor que 30M ano","Status":"Perdido","Já possui e-commerce":"Sim","Plataforma Atual":"Wordpress","Faturamento Mensal Loja Online":100000,"Faturamento Marketplace":20000,"Faturamento Anual":500000,"Qualidade Lead":"Superior","% Mensalidade":"3500","Data da última atividade":"2026-03-12","Valor Setup":"18.000","Valor":3500,"Data de fechamento":"","Website":"https://grupo-mega-1.lojaintegrada.com.br/","Segmento":"Embalagens","Qtd Lojas Físicas":2,"E-mail - Trabalho":"mariarita@grupomegadescartaveis.com.br","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Samuel Edson Alonso-C4","Etapa":"Contato","Origem MKT":"Mídia Paga","Lista":"Google","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem orçamento","Data de criação":"2026-02-03","Faturamento MKT":"Maior que 80M ano","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":0,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2026-02-03","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"","Segmento":"Não identificado","Qtd Lojas Físicas":"","E-mail - Trabalho":"samukest@gmail.com","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Maria Vitória-C3","Etapa":"Contato","Origem MKT":"Site JET","Lista":"Tráfego Direto","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem orçamento","Data de criação":"2026-02-03","Faturamento MKT":"Maior que 80M ano","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":1000,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2026-02-03","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"","Segmento":"Moda e Acessórios","Qtd Lojas Físicas":"","E-mail - Trabalho":"maria0911200@gmail.com","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Graciele Arruda-C4","Etapa":"Contato","Origem MKT":"Site JET","Lista":"Tráfego Direto","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem orçamento","Data de criação":"2026-02-03","Faturamento MKT":"Maior que 80M ano","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":1000,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2026-02-03","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"","Segmento":"Moda e Acessórios","Qtd Lojas Físicas":"","E-mail - Trabalho":"grtopgraf@gmail.com","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio On Case-Anti ICP","Etapa":"Contato","Origem MKT":"Case JET","Lista":"Case | Deco","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem Aderência","Data de criação":"2026-02-04","Faturamento MKT":"Maior que 80M ano","Status":"Perdido","Já possui e-commerce":"Sim","Plataforma Atual":"Tray Varejo","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":360000,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2026-05-07","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"https://www.oncasemix.com.br/","Segmento":"Outros","Qtd Lojas Físicas":0,"E-mail - Trabalho":"marilia@oncasebrasil.com.br","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Claudionele Pereira-C4","Etapa":"Contato","Origem MKT":"Mídia Paga","Lista":"Google","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem orçamento","Data de criação":"2026-02-04","Faturamento MKT":"Maior que 80M ano","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":0,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2026-02-04","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"","Segmento":"Auto","Qtd Lojas Físicas":"","E-mail - Trabalho":"claudionele33@gmail.com","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Haroldo Gustavo Bordignon- HABgestor-C4","Etapa":"Contato","Origem MKT":"E-mail Mktg","Lista":"Tráfego Direto","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem orçamento","Data de criação":"2026-02-05","Faturamento MKT":"Maior que 80M ano","Status":"Perdido","Já possui e-commerce":"","Plataforma Atual":"","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":0,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2026-02-11","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"","Segmento":"Alimentos e Bebidas","Qtd Lojas Físicas":2,"E-mail - Trabalho":"","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Merlin-C4","Etapa":"Contato","Origem MKT":"Google","Lista":"Orgânico","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem orçamento","Data de criação":"2026-02-05","Faturamento MKT":"Maior que 80M ano","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":1000000,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2026-02-05","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"https://merlin.com.br/","Segmento":"Outros","Qtd Lojas Físicas":"","E-mail - Trabalho":"tasselli@merlin.com.br","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Vagner-C4","Etapa":"Contato","Origem MKT":"Site JET","Lista":"Tráfego Direto","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem orçamento","Data de criação":"2026-02-05","Faturamento MKT":"Maior que 80M ano","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":0,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"","Segmento":"Não identificado","Qtd Lojas Físicas":"","E-mail - Trabalho":"vagnersousa-007@hotmail.com","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio DP Embalagens-C4","Etapa":"Oportunidade","Origem MKT":"Site JET","Lista":"Tráfego Direto","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem orçamento","Data de criação":"2026-02-06","Faturamento MKT":"Menor que 30M ano","Status":"Perdido","Já possui e-commerce":"Sim","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":81000,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2026-02-06","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"https://www.dpembalagens.com/","Segmento":"Embalagens","Qtd Lojas Físicas":"","E-mail - Trabalho":"leandrovianavendas@gmail.com","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Diproseg SP- C4","Etapa":"Negociação  +30","Origem MKT":"Mídia Paga","Lista":"Google","Criado por":"Bianca Lourenço","Responsável":"Rodrigo Amaral","Motivo da Perda":"Sem Aderência","Data de criação":"2026-02-09","Faturamento MKT":"","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":20000,"Faturamento Anual":36000000,"Qualidade Lead":"Superior","% Mensalidade":"3500","Data da última atividade":"2026-06-16","Valor Setup":"18.000","Valor":3500,"Data de fechamento":"","Website":"https://diprosegsp.com.br/","Segmento":"Eletro-Eletrônicos","Qtd Lojas Físicas":8,"E-mail - Trabalho":"mfaria@diprosegsp.com.br","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Sérgio-C4","Etapa":"Contato","Origem MKT":"Site JET","Lista":"Tráfego Direto","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem orçamento","Data de criação":"2026-02-09","Faturamento MKT":"Maior que 80M ano","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":1000,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2026-02-09","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"","Segmento":"Construção","Qtd Lojas Físicas":"","E-mail - Trabalho":"","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Grupo Elettromec-C1","Etapa":"Lead","Origem MKT":"Mídia Paga","Lista":"Google","Criado por":"Teselane Oliveira","Responsável":"Rodrigo Amaral","Motivo da Perda":"","Data de criação":"2026-02-09","Faturamento MKT":"","Status":"Aberto","Já possui e-commerce":"Sim","Plataforma Atual":"Wordpress","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":1000000000,"Qualidade Lead":"Superior","% Mensalidade":"5000","Data da última atividade":"2026-04-24","Valor Setup":"25.000","Valor":5000,"Data de fechamento":"","Website":"https://elettromec.com.br/","Segmento":"Casa e Decoração","Qtd Lojas Físicas":14,"E-mail - Trabalho":"alexsander.santos@elettromec.com.br","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Don Alcides-C1","Etapa":"Apresentação","Origem MKT":"Telefone","Lista":"Tráfego Direto","Criado por":"Teselane Oliveira","Responsável":"Vitor Martoni","Motivo da Perda":"Não enxergou valor","Data de criação":"2026-02-12","Faturamento MKT":"","Status":"Perdido","Já possui e-commerce":"Sim","Plataforma Atual":"Outros","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":100000000,"Qualidade Lead":"Superior","% Mensalidade":"","Data da última atividade":"2026-03-16","Valor Setup":"","Valor":3500,"Data de fechamento":"","Website":"https://www.donalcides.com.br/","Segmento":"Saúde e Beleza","Qtd Lojas Físicas":0,"E-mail - Trabalho":"kaique@donalcides.com.br, vinicius@donalcides.com.br, gabriel@donalcides.com.br","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Inovação Informática-C4","Etapa":"Contato","Origem MKT":"Site JET","Lista":"Whatsapp","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem orçamento","Data de criação":"2026-02-12","Faturamento MKT":"Maior que 80M ano","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":81000,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2026-02-12","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"https://inovacaodistribuicao.com.br/","Segmento":"Informática","Qtd Lojas Físicas":1,"E-mail - Trabalho":"fabricio@inovacaodistribuicao.com.br","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio S2i Distribuição Industrial-C4","Etapa":"Apresentação","Origem MKT":"Site JET","Lista":"Tráfego Direto","Criado por":"Teselane Oliveira","Responsável":"Rodrigo Amaral","Motivo da Perda":"Sem Contato","Data de criação":"2026-02-12","Faturamento MKT":"Entre 30M e 50M ano","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":81000,"Qualidade Lead":"Inferior","% Mensalidade":"R$ 3.500","Data da última atividade":"2026-03-27","Valor Setup":"20.000","Valor":3500,"Data de fechamento":"","Website":"https://s2i.com.br/","Segmento":"Outros","Qtd Lojas Físicas":"","E-mail - Trabalho":"engenharia@s2i.com.br","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Joaquim Batista Farias-C3","Etapa":"Contato","Origem MKT":"Site JET","Lista":"Tráfego Direto","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem orçamento","Data de criação":"2026-02-18","Faturamento MKT":"Maior que 80M ano","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":0,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2026-02-18","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"","Segmento":"Moda e Acessórios","Qtd Lojas Físicas":"","E-mail - Trabalho":"joaquimbatistafaria1960@gmail.com","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Kastek Vedações-C2","Etapa":"Oportunidade","Origem MKT":"Botão Whatsapp","Lista":"Tráfego Direto","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem orçamento","Data de criação":"2026-02-18","Faturamento MKT":"Maior que 80M ano","Status":"Perdido","Já possui e-commerce":"Sim","Plataforma Atual":"NuvemShop","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":81000,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2026-02-18","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"https://kastek.com.br/","Segmento":"Construção","Qtd Lojas Físicas":1,"E-mail - Trabalho":"","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Urbaniks-C3","Etapa":"Oportunidade","Origem MKT":"Mídia Paga","Lista":"Google","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem orçamento","Data de criação":"2026-02-19","Faturamento MKT":"Entre 30M e 50M ano","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":1000,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2026-02-19","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"","Segmento":"Casa e Decoração","Qtd Lojas Físicas":0,"E-mail - Trabalho":"iury@urbaniks.com.br","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Cassul Distribuidora de Produtos Agropecuários-C4","Etapa":"Diagnóstico","Origem MKT":"Site JET","Lista":"Tráfego Direto","Criado por":"Teselane Oliveira","Responsável":"Rodrigo Amaral","Motivo da Perda":"Sem orçamento","Data de criação":"2026-02-19","Faturamento MKT":"Maior que 80M ano","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":300000000,"Qualidade Lead":"Inferior","% Mensalidade":"3500","Data da última atividade":"2026-06-03","Valor Setup":"20.000","Valor":3500,"Data de fechamento":"","Website":"https://cassul.com.br/","Segmento":"Agronegócios","Qtd Lojas Físicas":1,"E-mail - Trabalho":"tatiana.borges@cassul.com.br","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Ameimi-C4","Etapa":"Contato","Origem MKT":"Mídia Paga","Lista":"Google","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem orçamento","Data de criação":"2026-02-20","Faturamento MKT":"Entre 30M e 50M ano","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":0,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2026-02-20","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"","Segmento":"Não identificado","Qtd Lojas Físicas":"","E-mail - Trabalho":"gigacell.taiane@gmail.com","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Win Distribuidora-C4","Etapa":"Diagnóstico","Origem MKT":"Mídia Paga","Lista":"Google","Criado por":"Teselane Oliveira","Responsável":"Rodrigo Amaral","Motivo da Perda":"Projeto foi adiado","Data de criação":"2026-02-25","Faturamento MKT":"","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":360000,"Qualidade Lead":"Superior","% Mensalidade":"R$ 20 por pedido com minimo de R$ 3.500","Data da última atividade":"2026-04-17","Valor Setup":"25.000","Valor":3500,"Data de fechamento":"","Website":"","Segmento":"Suplementos","Qtd Lojas Físicas":4,"E-mail - Trabalho":"marcussaviojob@gmail.com","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Innovare Produtos Médicos E Hospitalares Ltda-C4","Etapa":"Contato","Origem MKT":"Case JET","Lista":"Case | Pirulito","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem orçamento","Data de criação":"2026-02-27","Faturamento MKT":"","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":360000,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2026-02-27","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"","Segmento":"Equipamentos Hospitalares | Médicos","Qtd Lojas Físicas":"","E-mail - Trabalho":"innovarebrasil93@gmail.com","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Papel Link-C4","Etapa":"Contato","Origem MKT":"Site JET","Lista":"Orgânico","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem orçamento","Data de criação":"2026-02-27","Faturamento MKT":"Maior que 80M ano","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":360000,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2026-02-27","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"","Segmento":"Papelaria e Escritório","Qtd Lojas Físicas":2,"E-mail - Trabalho":"papellink@gmail.com","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Werllyson Araújo Pereira-C4","Etapa":"Contato","Origem MKT":"Mídia Paga","Lista":"Google","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem orçamento","Data de criação":"2026-03-02","Faturamento MKT":"Maior que 80M ano","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":0,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2026-03-02","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"","Segmento":"Não identificado","Qtd Lojas Físicas":"","E-mail - Trabalho":"werllysonaraujopereira56@gmail.com","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio The Waffle King-C2","Etapa":"Apresentação","Origem MKT":"Site JET","Lista":"Tráfego Direto","Criado por":"Teselane Oliveira","Responsável":"Rodrigo Amaral","Motivo da Perda":"Sem Contato","Data de criação":"2026-03-02","Faturamento MKT":"Entre 30M e 50M ano","Status":"Perdido","Já possui e-commerce":"Sim","Plataforma Atual":"Wbuy","Faturamento Mensal Loja Online":50000,"Faturamento Marketplace":0,"Faturamento Anual":81000,"Qualidade Lead":"Superior","% Mensalidade":"","Data da última atividade":"2026-04-07","Valor Setup":"","Valor":5000,"Data de fechamento":"","Website":"https://lojavirtual.thewaffleking.com.br/","Segmento":"Alimentos e Bebidas","Qtd Lojas Físicas":"","E-mail - Trabalho":"barcelos@thewaffleking.com.br","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Velans Distribuidora-C4","Etapa":"Lead","Origem MKT":"Mídia Paga","Lista":"Google","Criado por":"Teselane Oliveira","Responsável":"Rodrigo Amaral","Motivo da Perda":"","Data de criação":"2026-03-03","Faturamento MKT":"","Status":"Aberto","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":100000000,"Qualidade Lead":"Superior","% Mensalidade":"R$ 2500 + Faixa de Faturamento","Data da última atividade":"2026-04-15","Valor Setup":"25.000","Valor":3500,"Data de fechamento":"","Website":"https://velans.com.br/","Segmento":"Eletro-Eletrônicos","Qtd Lojas Físicas":0,"E-mail - Trabalho":"marc@velans.com.br","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Edimara Vanessa Xavier-C4","Etapa":"Contato","Origem MKT":"Site JET","Lista":"Tráfego Direto","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem orçamento","Data de criação":"2026-03-04","Faturamento MKT":"Maior que 80M ano","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":0,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2026-03-04","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"","Segmento":"Não identificado","Qtd Lojas Físicas":"","E-mail - Trabalho":"edimaraaxavier531@gmail.com","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Pro Decor-C1","Etapa":"Contato","Origem MKT":"Site JET","Lista":"Tráfego Direto","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem orçamento","Data de criação":"2026-03-04","Faturamento MKT":"Maior que 80M ano","Status":"Perdido","Já possui e-commerce":"Sim","Plataforma Atual":"Tray Varejo","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":81000,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2026-03-05","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"https://www.prodecor.com.br/loja/","Segmento":"Casa e Decoração","Qtd Lojas Físicas":0,"E-mail - Trabalho":"mrandrad@gmail.com","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Cristopher-C4","Etapa":"Contato","Origem MKT":"Site JET","Lista":"Case | Daiso","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem orçamento","Data de criação":"2026-03-06","Faturamento MKT":"Maior que 80M ano","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":0,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2026-03-06","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"","Segmento":"Não identificado","Qtd Lojas Físicas":0,"E-mail - Trabalho":"sfumassauro@gmail.com","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Holt Ateliê-C1","Etapa":"Contato","Origem MKT":"Site JET","Lista":"Tráfego Direto","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem Contato","Data de criação":"2026-03-09","Faturamento MKT":"Maior que 80M ano","Status":"Perdido","Já possui e-commerce":"Sim","Plataforma Atual":"NuvemShop","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":1000,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2026-03-10","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"https://www.holtatelier.com.br/","Segmento":"Moda e Acessórios","Qtd Lojas Físicas":"","E-mail - Trabalho":"cttholtatelier@gmail.com","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Joy-C3","Etapa":"Contato","Origem MKT":"Mídia Paga","Lista":"Google","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem orçamento","Data de criação":"2026-03-09","Faturamento MKT":"Maior que 80M ano","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":81000,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2026-03-09","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"","Segmento":"Moda e Acessórios","Qtd Lojas Físicas":1,"E-mail - Trabalho":"gabriela_mouraviana@yahoo.com.br","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Cafran Artefatos de Plástico-C4","Etapa":"Apresentação","Origem MKT":"Site JET","Lista":"Omie","Criado por":"Teselane Oliveira","Responsável":"Rodrigo Amaral","Motivo da Perda":"Sem Aderência","Data de criação":"2026-03-09","Faturamento MKT":"Entre 30M e 50M ano","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":360000,"Qualidade Lead":"Inferior","% Mensalidade":"5.000 minimo","Data da última atividade":"2026-03-10","Valor Setup":"15.000","Valor":5000,"Data de fechamento":"","Website":"https://www.cafran.com.br/","Segmento":"Construção","Qtd Lojas Físicas":0,"E-mail - Trabalho":"helen@cafran.com.br, rodrigo@cafran.com.br","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Cleiton de Jesus Braga -C4","Etapa":"Contato","Origem MKT":"Site JET","Lista":"Case | Deco","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem orçamento","Data de criação":"2026-03-09","Faturamento MKT":"Entre 30M e 50M ano","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":0,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2026-03-09","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"","Segmento":"Não identificado","Qtd Lojas Físicas":"","E-mail - Trabalho":"comercial@dixinvestsec.com.br","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Mega Comercial-C2","Etapa":"Oportunidade","Origem MKT":"Mídia Paga","Lista":"Google","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem orçamento","Data de criação":"2026-03-11","Faturamento MKT":"Entre 30M e 50M ano","Status":"Perdido","Já possui e-commerce":"Sim","Plataforma Atual":"Outros","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":50000,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2026-03-11","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"https://mga.inf.br/","Segmento":"Outros","Qtd Lojas Físicas":0,"E-mail - Trabalho":"alexandre.vargas@mga.inf.br","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio ADR Network -C2","Etapa":"Oportunidade","Origem MKT":"Telefone","Lista":"Tráfego Direto","Criado por":"Teselane Oliveira","Responsável":"Vitor Martoni","Motivo da Perda":"","Data de criação":"2026-03-11","Faturamento MKT":"","Status":"Aberto","Já possui e-commerce":"Sim","Plataforma Atual":"NuvemShop","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":150000,"Faturamento Anual":100000000,"Qualidade Lead":"Superior","% Mensalidade":"","Data da última atividade":"2026-08-06","Valor Setup":"","Valor":3100,"Data de fechamento":"","Website":"https://loja.adrnetwork.com.br/","Segmento":"Outros","Qtd Lojas Físicas":"","E-mail - Trabalho":"marketing@adrnetwork.com.br","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio SamFit-C3","Etapa":"Contato","Origem MKT":"Site JET","Lista":"Tráfego Direto","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem orçamento","Data de criação":"2026-03-12","Faturamento MKT":"Maior que 80M ano","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":1000,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2026-03-12","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"","Segmento":"Moda e Acessórios","Qtd Lojas Físicas":1,"E-mail - Trabalho":"samaraoliveira916@gmail.com","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Carbonpeças-C4","Etapa":"Contato","Origem MKT":"Site JET","Lista":"Omie","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem Aderência","Data de criação":"2026-03-12","Faturamento MKT":"Entre 30M e 50M ano","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":81000,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2026-03-16","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"https://carbonpecas.com.br/","Segmento":"Outros","Qtd Lojas Físicas":"","E-mail - Trabalho":"carbonpecas@carbonpecas.com.br","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Agência Idônea Comunicação-C4","Etapa":"Contato","Origem MKT":"Site JET","Lista":"Tráfego Direto","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Não consegui qualificar","Data de criação":"2026-03-13","Faturamento MKT":"","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":0,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2026-03-18","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"https://www.idonea.com.br/","Segmento":"Outros","Qtd Lojas Físicas":"","E-mail - Trabalho":"marcelo@idonea.com.br","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Clamima Distribuidora-C4","Etapa":"Oportunidade","Origem MKT":"Site JET","Lista":"Tráfego Direto","Criado por":"Teselane Oliveira","Responsável":"Vitor Martoni","Motivo da Perda":"Sem Contato","Data de criação":"2026-03-13","Faturamento MKT":"","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":6000000,"Qualidade Lead":"Superior","% Mensalidade":"","Data da última atividade":"2026-06-24","Valor Setup":"","Valor":3100,"Data de fechamento":"","Website":"https://www.clamima.com.br/","Segmento":"Outros","Qtd Lojas Físicas":1,"E-mail - Trabalho":"vendas4@clamima.com.br","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Zuzap-Levi Distribuidora-C3","Etapa":"Contato","Origem MKT":"Base JET","Lista":"Migração","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem orçamento","Data de criação":"2026-03-13","Faturamento MKT":"Maior que 80M ano","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":81000,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2026-03-16","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"","Segmento":"","Qtd Lojas Físicas":"","E-mail - Trabalho":"zuzapvendas@hotmail.com","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Ortopedia Vaalmed-C2","Etapa":"Oportunidade","Origem MKT":"Site JET","Lista":"Tráfego Direto","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Não enxergou valor","Data de criação":"2026-03-16","Faturamento MKT":"Entre 30M e 50M ano","Status":"Perdido","Já possui e-commerce":"Sim","Plataforma Atual":"Outros","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":81000,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2026-03-17","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"https://www.ortopediavaalmed.com.br/","Segmento":"Equipamentos Hospitalares | Médicos","Qtd Lojas Físicas":5,"E-mail - Trabalho":"comercial@ortopediavaalmed.com.br","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Maria Eduarda-C4","Etapa":"Contato","Origem MKT":"Mídia Paga","Lista":"Google","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem orçamento","Data de criação":"2026-03-17","Faturamento MKT":"","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":0,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2026-03-17","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"","Segmento":"Não identificado","Qtd Lojas Físicas":"","E-mail - Trabalho":"eduarda290846@gmail.com","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Closet Simone Lopes-C1","Etapa":"Contato","Origem MKT":"Site JET","Lista":"Botão Whatsapp","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem orçamento","Data de criação":"2026-03-23","Faturamento MKT":"Maior que 80M ano","Status":"Perdido","Já possui e-commerce":"Sim","Plataforma Atual":"Outros","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":81000,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2026-03-23","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"https://www.closetsarl.com.br/","Segmento":"Moda e Acessórios","Qtd Lojas Físicas":1,"E-mail - Trabalho":"simonearlopes@hotmail.com","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Pharmes-C1","Etapa":"Negociação  +30","Origem MKT":"Site JET","Lista":"Tráfego Direto","Criado por":"Teselane Oliveira","Responsável":"Vitor Martoni","Motivo da Perda":"Não enxergou valor","Data de criação":"2026-03-23","Faturamento MKT":"Maior que 80M ano","Status":"Perdido","Já possui e-commerce":"Sim","Plataforma Atual":"Outros","Faturamento Mensal Loja Online":120000,"Faturamento Marketplace":0,"Faturamento Anual":5040000,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2026-04-13","Valor Setup":"","Valor":2500,"Data de fechamento":"","Website":"https://pharmes.com.br/","Segmento":"Saúde e Beleza","Qtd Lojas Físicas":1,"E-mail - Trabalho":"alessandro.pharmes@gmail.com","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Via Elétrica-C4","Etapa":"Oportunidade","Origem MKT":"Site JET","Lista":"Tráfego Direto","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Não enxergou valor","Data de criação":"2026-03-23","Faturamento MKT":"Entre 30M e 50M ano","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":100000000,"Qualidade Lead":"Superior","% Mensalidade":"","Data da última atividade":"2026-03-24","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"https://viaeletrica.com.br/","Segmento":"Materiais Elétricos","Qtd Lojas Físicas":2,"E-mail - Trabalho":"thiagobelice@gmail.com","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Galáxia Atacadista e Distribuidora-C2","Etapa":"Contato","Origem MKT":"Site JET","Lista":"Case | Maze","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem orçamento","Data de criação":"2026-03-24","Faturamento MKT":"Entre 30M e 50M ano","Status":"Perdido","Já possui e-commerce":"Sim","Plataforma Atual":"Outros","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":81000,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2026-03-24","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"https://galaxiadistribuidora.com.br/","Segmento":"Outros","Qtd Lojas Físicas":"","E-mail - Trabalho":"thalles.kuhn123@gmail.com","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Nativa Materiais Eletricos-C4","Etapa":"Contato","Origem MKT":"Mídia Paga","Lista":"Google","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem orçamento","Data de criação":"2026-03-25","Faturamento MKT":"Maior que 80M ano","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":81000,"Faturamento Marketplace":0,"Faturamento Anual":0,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2026-03-25","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"","Segmento":"Materiais Elétricos","Qtd Lojas Físicas":1,"E-mail - Trabalho":"jelsivam.silva@nativaengenharia.com","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Jackeline Onofre Brand-C3","Etapa":"Apresentação","Origem MKT":"Mídia Paga","Lista":"Google","Criado por":"Teselane Oliveira","Responsável":"Rodrigo Amaral","Motivo da Perda":"Sem Contato","Data de criação":"2026-03-26","Faturamento MKT":"Maior que 80M ano","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":81000,"Qualidade Lead":"Inferior","% Mensalidade":"3500","Data da última atividade":"2026-04-07","Valor Setup":"20.000","Valor":3500,"Data de fechamento":"","Website":"","Segmento":"Moda e Acessórios","Qtd Lojas Físicas":1,"E-mail - Trabalho":"gefernandessantos@gmail.com","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Loja Cheff-C1","Etapa":"Diagnóstico","Origem MKT":"Mídia Paga","Lista":"Google","Criado por":"Teselane Oliveira","Responsável":"Rodrigo Amaral","Motivo da Perda":"Sem Aderência","Data de criação":"2026-03-26","Faturamento MKT":"","Status":"Perdido","Já possui e-commerce":"Sim","Plataforma Atual":"Linx","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":81000,"Qualidade Lead":"Superior","% Mensalidade":"","Data da última atividade":"2026-03-31","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"https://www.lojacheff.com.br/","Segmento":"Casa e Decoração","Qtd Lojas Físicas":1,"E-mail - Trabalho":"compras@lojacheff.com.br, vitor@lojacheff.com.br","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Dion Ochner-C1","Etapa":"Contato","Origem MKT":"Botão Whatsapp","Lista":"Tráfego Direto","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem orçamento","Data de criação":"2026-03-31","Faturamento MKT":"Maior que 80M ano","Status":"Perdido","Já possui e-commerce":"Sim","Plataforma Atual":"Outros","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":81000,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2026-03-31","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"https://www.dionochner.com.br/","Segmento":"Moda e Acessórios","Qtd Lojas Físicas":"","E-mail - Trabalho":"dionei.ochner@gmail.com, dionochner@outlook.com","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Farmácia São Francisco -C3","Etapa":"Contato","Origem MKT":"Mídia Paga","Lista":"Google","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem orçamento","Data de criação":"2026-04-01","Faturamento MKT":"Maior que 80M ano","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":0,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2026-04-01","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"","Segmento":"Saúde e Beleza","Qtd Lojas Físicas":1,"E-mail - Trabalho":"fabioborba85@gmail.com","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio GBI Brasil-C4","Etapa":"Oportunidade","Origem MKT":"Telefone","Lista":"Tráfego Direto","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem orçamento","Data de criação":"2026-04-01","Faturamento MKT":"Maior que 80M ano","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":360000,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2026-04-01","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"https://gbibrasil.com.br/","Segmento":"Outros","Qtd Lojas Físicas":0,"E-mail - Trabalho":"marco@gbibrasil.com.br","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Booktoy Livraria e Editora Ltda-C2","Etapa":"Contato","Origem MKT":"Site JET","Lista":"Tráfego Direto","Criado por":"Teselane Oliveira","Responsável":"Rodrigo Amaral","Motivo da Perda":"","Data de criação":"2026-04-06","Faturamento MKT":"Entre 30M e 50M ano","Status":"Aberto","Já possui e-commerce":"Sim","Plataforma Atual":"Opencart","Faturamento Mensal Loja Online":200000,"Faturamento Marketplace":0,"Faturamento Anual":2000000,"Qualidade Lead":"Inferior","% Mensalidade":"3500","Data da última atividade":"2026-07-15","Valor Setup":"+ 35.000","Valor":6500,"Data de fechamento":"","Website":"https://www.booktoy.com.br/","Segmento":"Livrarias","Qtd Lojas Físicas":1,"E-mail - Trabalho":"vinicius@booktoy.com.br, mleira@gmail.com, marcelo@booktoy.com.br","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Ricardo Campos-C4","Etapa":"Oportunidade","Origem MKT":"Site JET","Lista":"Tráfego Direto","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem orçamento","Data de criação":"2026-04-09","Faturamento MKT":"Maior que 80M ano","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":0,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2026-04-09","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"","Segmento":"Outros","Qtd Lojas Físicas":"","E-mail - Trabalho":"ricardoercampos@gmail.com","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Lucas Martins-C4","Etapa":"Contato","Origem MKT":"Site JET","Lista":"Tráfego Direto","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem orçamento","Data de criação":"2026-04-10","Faturamento MKT":"Maior que 80M ano","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":0,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2026-04-10","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"","Segmento":"Não identificado","Qtd Lojas Físicas":"","E-mail - Trabalho":"lukasmartins_sk8@hotmail.com","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio ÉdeCasa Móveis-C1","Etapa":"Contato","Origem MKT":"Case JET","Lista":"Case | M Pozenato","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem orçamento","Data de criação":"2026-04-16","Faturamento MKT":"Entre 30M e 50M ano","Status":"Perdido","Já possui e-commerce":"Sim","Plataforma Atual":"Tray Varejo","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":81000,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2026-04-16","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"https://www.edecasamoveis.com.br/","Segmento":"Casa e Decoração","Qtd Lojas Físicas":0,"E-mail - Trabalho":"correapincthiago@gmail.com","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Tellycom Brasil Ltda-C2","Etapa":"Oportunidade","Origem MKT":"Google","Lista":"Orgânico","Criado por":"Bárbara Lima","Responsável":"Teselane Oliveira","Motivo da Perda":"Não enxergou valor","Data de criação":"2026-04-16","Faturamento MKT":"Menor que 30M ano","Status":"Perdido","Já possui e-commerce":"Sim","Plataforma Atual":"Outros","Faturamento Mensal Loja Online":500000,"Faturamento Marketplace":0,"Faturamento Anual":25000000,"Qualidade Lead":"Superior","% Mensalidade":"","Data da última atividade":"2026-04-28","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"https://www.tellycom.com.br/inicio","Segmento":"Outros","Qtd Lojas Físicas":"","E-mail - Trabalho":"deyviane@tellycom.com.br","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Ivan Luiz-C3","Etapa":"Contato","Origem MKT":"Mídia Paga","Lista":"Google","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem orçamento","Data de criação":"2026-04-20","Faturamento MKT":"Maior que 80M ano","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":0,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2026-04-20","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"","Segmento":"Casa e Decoração","Qtd Lojas Físicas":"","E-mail - Trabalho":"afonsoivan23@gmail.com","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Eletro Sul Ferramentas-C4","Etapa":"Diagnóstico","Origem MKT":"Mídia Paga","Lista":"Google","Criado por":"Teselane Oliveira","Responsável":"Rodrigo Amaral","Motivo da Perda":"Sem interesse - Ramper","Data de criação":"2026-04-22","Faturamento MKT":"Entre 30M e 50M ano","Status":"Perdido","Já possui e-commerce":"Sim","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":360000,"Qualidade Lead":"Superior","% Mensalidade":"3500","Data da última atividade":"2026-05-13","Valor Setup":"25.000","Valor":3500,"Data de fechamento":"","Website":"https://www.eletrosulferramentas.com.br/","Segmento":"Ferramentas","Qtd Lojas Físicas":1,"E-mail - Trabalho":"eletrosul@eletrosulferramentas.com.br","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Gustavo Sodré Biff- Performa Tráfego pago","Etapa":"Contato","Origem MKT":"Site JET","Lista":"Tráfego Direto","Criado por":"Bárbara Lima","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem orçamento","Data de criação":"2026-04-22","Faturamento MKT":"Entre 30M e 50M ano","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":0,"Qualidade Lead":"Superior","% Mensalidade":"","Data da última atividade":"2026-04-23","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"","Segmento":"Não identificado","Qtd Lojas Físicas":"","E-mail - Trabalho":"gustavo-sodre37@hotmail.com","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Negócio Esmalte Priscila-C3","Etapa":"Oportunidade","Origem MKT":"Site JET","Lista":"Tráfego Direto","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem orçamento","Data de criação":"2026-04-23","Faturamento MKT":"Maior que 80M ano","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":81000,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2026-04-24","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"https://www.esmaltepriscila.com.br/","Segmento":"Saúde e Beleza","Qtd Lojas Físicas":0,"E-mail - Trabalho":"priscilafracalozzi@hotmail.com","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Herik Victor-C3","Etapa":"Contato","Origem MKT":"Site JET","Lista":"Tráfego Direto","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem orçamento","Data de criação":"2026-04-27","Faturamento MKT":"Entre 30M e 50M ano","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":0,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2026-04-27","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"","Segmento":"Moda e Acessórios","Qtd Lojas Físicas":"","E-mail - Trabalho":"herikvictor99@gmail.com","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Nutraliv Suplementos-Anti-ICP","Etapa":"Contato","Origem MKT":"Mídia Paga","Lista":"Google","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem orçamento","Data de criação":"2026-04-29","Faturamento MKT":"Entre 30M e 50M ano","Status":"Perdido","Já possui e-commerce":"Sim","Plataforma Atual":"Outros","Faturamento Mensal Loja Online":150000,"Faturamento Marketplace":0,"Faturamento Anual":4800000,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2026-04-29","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"https://fleniv.com.br/capsulas/","Segmento":"Saúde e Beleza","Qtd Lojas Físicas":0,"E-mail - Trabalho":"financeiro@nutralivsuplementos.com.br","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Figueira Modas e Acessórios-Anti-ICP","Etapa":"Contato","Origem MKT":"Google","Lista":"Orgânico","Criado por":"Teselane Oliveira","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem orçamento","Data de criação":"2026-04-29","Faturamento MKT":"Maior que 80M ano","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":360000,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2026-04-29","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"","Segmento":"Moda e Acessórios","Qtd Lojas Físicas":1,"E-mail - Trabalho":"bessapresentesecia@gmail.com","E-mail - Residencial":"","E-mail - Outros":""},{"Título":"Ksm Tecnologia Comercio e Industria-Anti-ICP","Etapa":"Contato","Origem MKT":"Google","Lista":"Orgânico","Criado por":"Bárbara Lima","Responsável":"Teselane Oliveira","Motivo da Perda":"Sem orçamento","Data de criação":"2026-04-29","Faturamento MKT":"Menor que 30M ano","Status":"Perdido","Já possui e-commerce":"Não","Plataforma Atual":"Não tem","Faturamento Mensal Loja Online":0,"Faturamento Marketplace":0,"Faturamento Anual":2400000,"Qualidade Lead":"Inferior","% Mensalidade":"","Data da última atividade":"2026-04-30","Valor Setup":"","Valor":0,"Data de fechamento":"","Website":"https://ksmtecnologia.ind.br/","Segmento":"Outros","Qtd Lojas Físicas":0,"E-mail - Trabalho":"cris.mastria@ksmtecnologia.ind.br","E-mail - Residencial":"","E-mail - Outros":""}];
+  const EMBEDDED_SNAPSHOT_LABEL = 'deals-8649403-4209.xlsx';
+
+  const FIXED_COLUMNS = ['Título', 'Valor', 'Moeda', 'Etapa', 'Status', 'Responsável', 'Motivo da Perda', 'Data de criação', 'Data prevista de fechamento', 'Data de fechamento'];
+  const CONCEPT_ALIASES = {
+    qualidade: ['Qualidade Lead', 'Qualidade do Lead'],
+    ecommerce: ['Já possui e-commerce', 'Possui Ecommerce', 'Possui E-commerce', 'Já possui E-commerce'],
+    origem: ['Lista', 'Origem'],
+    origemMkt: ['Origem MKT']
+  };
+  const STAGE_ORDER = ['Lead', 'Contato', 'Diagnóstico', 'Apresentação', 'Negociação', 'Oportunidade', 'Fechamento'];
+  const PALETTE = ['#f23740', '#5b6478', '#ffc15e', '#939aad', '#b2242c', '#c9cdd6', '#e8949a', '#2bd98a', '#f2a6ab', '#737b8c'];
+
+  const owners = ['Marina Alves', 'Bruno Costa', 'Carla Dias', 'Felipe Souza'];
+  const listaOrigem = ['Tráfego Direto', 'Mídia Paga', 'Orgânico', 'E-mail MKT', 'Botão Whatsapp', 'Case', 'Camp. Institucional'];
+  const plataformas = ['Não tem', 'Tray Varejo', 'Vtex', 'NuvemShop', 'Shopify', 'Magazord', 'Loja Integrada', 'Wordpress', 'Não há dados'];
+  const segmentos = ['Moda e Acessórios', 'Saúde e Beleza', 'Alimentos e Bebidas', 'Construção', 'Auto', 'Casa e Decoração', 'Outros', 'Não identificado'];
+  const modelosVenda = ['Omnichannel ou B2B real (2)', 'B2C tradicional (1)', 'Marketplace (1)'];
+  const motivosPerda = ['Sem orçamento', 'Projeto foi adiado', 'Sem Aderência', 'Não enxergou valor', 'Sem Contato', 'Não consegui qualificar'];
+
+  function genMockDeals() {
+    const deals = [];
+    const now = new Date();
+    for (let i = 0; i < 160; i++) {
+      const createdDaysAgo = Math.floor(Math.random() * 200);
+      const created = new Date(now); created.setDate(created.getDate() - createdDaysAgo);
+      const r = Math.random();
+      const status = r < 0.28 ? 'Ganho' : (r < 0.46 ? 'Perdido' : 'Aberto');
+      const stage = status === 'Ganho' ? 'Fechamento' : STAGE_ORDER[Math.floor(Math.random() * STAGE_ORDER.length)];
+      let closeDate = '';
+      if (status !== 'Aberto') {
+        const cd = new Date(created); cd.setDate(cd.getDate() + Math.floor(Math.random() * 40) + 3);
+        closeDate = cd.toISOString().slice(0, 10);
+      }
+      const row = {};
+      row['Título'] = 'Oportunidade #' + (1000 + i);
+      row['Valor'] = Math.round((Math.random() * 18000 + 1500));
+      row['Moeda'] = 'BRL';
+      row['Etapa'] = stage;
+      row['Status'] = status;
+      row['Responsável'] = owners[Math.floor(Math.random() * owners.length)];
+      row['Motivo da Perda'] = status === 'Perdido' ? motivosPerda[Math.floor(Math.random() * motivosPerda.length)] : '';
+      row['Data de criação'] = created.toISOString().slice(0, 10);
+      row['Data prevista de fechamento'] = '';
+      row['Data de fechamento'] = closeDate;
+      row['Qualidade Lead'] = Math.random() < 0.35 ? 'Superior' : 'Inferior';
+      row['Tier'] = ['T1', 'T2', 'T3'][Math.floor(Math.random() * 3)];
+      row['Lista'] = listaOrigem[Math.floor(Math.random() * listaOrigem.length)];
+      row['Já possui e-commerce'] = Math.random() < 0.35 ? 'Sim' : 'Não';
+      row['Plataforma Atual'] = plataformas[Math.floor(Math.random() * plataformas.length)];
+      row['Segmento'] = segmentos[Math.floor(Math.random() * segmentos.length)];
+      row['Faturamento Anual'] = Math.round(Math.random() * 100000000) + 30000;
+      row['Modelo de Vendas'] = modelosVenda[Math.floor(Math.random() * modelosVenda.length)];
+      deals.push(row);
+    }
+    return deals;
+  }
+
+  let allDeals = [];
+  let charts = {};
+  let detectedColumns = [];
+  let concepts = { qualidade: null, ecommerce: null, origem: null, origemMkt: null };
+
+  const fmtBRL = (v) => 'R$ ' + Number(v || 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 });
+
+  function parseMoney(v) {
+    if (v === null || v === undefined || v === '') return NaN;
+    if (typeof v === 'number') return v;
+    let s = String(v).replace(/[^\d,.-]/g, '');
+    if (s.indexOf(',') > -1 && s.indexOf('.') > -1) s = s.replace(/\./g, '').replace(',', '.');
+    else if (s.indexOf(',') > -1) s = s.replace(',', '.');
+    return parseFloat(s);
+  }
+
+  function detectHeaders(deals) {
+    return deals.length ? Object.keys(deals[0]) : FIXED_COLUMNS;
+  }
+
+  function findConceptColumn(headers, aliases) {
+    for (let i = 0; i < aliases.length; i++) {
+      if (headers.indexOf(aliases[i]) > -1) return aliases[i];
+    }
+    return null;
+  }
+
+  function detectConcepts(headers) {
+    return {
+      qualidade: findConceptColumn(headers, CONCEPT_ALIASES.qualidade),
+      ecommerce: findConceptColumn(headers, CONCEPT_ALIASES.ecommerce),
+      origem: findConceptColumn(headers, CONCEPT_ALIASES.origem),
+      origemMkt: findConceptColumn(headers, CONCEPT_ALIASES.origemMkt)
+    };
+  }
+
+  function groupByCount(deals, column, cleanLabel) {
+    const map = {};
+    deals.forEach((d) => {
+      let v = d[column];
+      if (v === undefined || v === null || v === '') return;
+      if (cleanLabel) v = String(v).replace(/\s*\(\d+\)\s*$/, '').trim();
+      map[v] = (map[v] || 0) + 1;
+    });
+    return map;
+  }
+
+  function topEntries(map, limit) {
+    const entries = Object.entries(map).sort((a, b) => b[1] - a[1]);
+    if (entries.length <= limit) return entries;
+    const top = entries.slice(0, limit);
+    const restSum = entries.slice(limit).reduce((s, e) => s + e[1], 0);
+    top.push(['Outros', restSum]);
+    return top;
+  }
+
+  function isMostlyDateLike(vals) {
+    const dateCount = vals.filter((v) => /^\d{4}-\d{1,2}-\d{1,2}/.test(String(v)) || /^\d{1,2}\/\d{1,2}\/\d{2,4}/.test(String(v))).length;
+    return dateCount / vals.length > 0.6;
+  }
+
+  // Decide como (ou se) exibir uma coluna extra como card de qualificação:
+  // 'money' = número grande (faturamento etc.) → agrupar em faixas
+  // 'categorical' = valores repetidos (categoria, número pequeno) → contar
+  // 'skip' = valores quase todos únicos (e-mail, site, data, ids) → não mostrar
+  function decideRenderMode(deals, column) {
+    const vals = deals.map((d) => d[column]).filter((v) => v !== undefined && v !== null && v !== '');
+    if (vals.length < 3) return 'skip';
+    if (isMostlyDateLike(vals)) return 'skip';
+    const numericVals = vals.map(parseMoney).filter((n) => !isNaN(n));
+    if (numericVals.length / vals.length > 0.6) {
+      const maxVal = Math.max(...numericVals);
+      return maxVal >= 1000 ? 'money' : 'categorical';
+    }
+    const distinctRatio = new Set(vals).size / vals.length;
+    return distinctRatio <= 0.5 ? 'categorical' : 'skip';
+  }
+
+  function bucketMoney(deals, column) {
+    const ranges = [
+      { max: 100000, label: '< 100 mil' },
+      { max: 1000000, label: '100 mil – 1 milhão' },
+      { max: 10000000, label: '1 – 10 milhões' },
+      { max: 30000000, label: '10 – 30 milhões' },
+      { max: 100000000, label: '30 – 100 milhões' },
+      { max: Infinity, label: '> 100 milhões' }
+    ];
+    const map = {};
+    ranges.forEach((r) => { map[r.label] = 0; });
+    deals.forEach((d) => {
+      const raw = d[column];
+      if (raw === undefined || raw === null || raw === '') return;
+      const n = parseMoney(raw);
+      if (isNaN(n)) return;
+      const bucket = ranges.find((r) => n <= r.max);
+      map[bucket.label]++;
+    });
+    return map;
+  }
+
+  function weekdayName(dateStr) {
+    const days = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
+    const d = new Date(dateStr);
+    if (isNaN(d)) return null;
+    return days[d.getDay()];
+  }
+
+  function getVal(id) {
+    const el = document.getElementById(id);
+    return el ? el.value : '';
+  }
+
+  function monthLabel(ym) {
+    const parts = ym.split('-');
+    const d = new Date(Number(parts[0]), Number(parts[1]) - 1, 1);
+    const name = d.toLocaleDateString('pt-BR', { month: 'long' });
+    return name.charAt(0).toUpperCase() + name.slice(1) + ' de ' + parts[0];
+  }
+
+  function monthNameOnly(ym) {
+    const parts = ym.split('-');
+    const d = new Date(Number(parts[0]), Number(parts[1]) - 1, 1);
+    const name = d.toLocaleDateString('pt-BR', { month: 'long' });
+    return name.charAt(0).toUpperCase() + name.slice(1);
+  }
+
+  function matchesPeriod(d, periodVal) {
+    if (!periodVal || periodVal === 'all') return true;
+    // A referência de data usada aqui é sempre "Negócio - Negócio criado em"
+    // (mapeada para o campo canônico "Data de criação").
+    const ref = d['Data de criação'] ? new Date(d['Data de criação']) : null;
+    if (!ref || isNaN(ref)) return false;
+    if (periodVal.indexOf('year:') === 0) return String(ref.getFullYear()) === periodVal.slice(5);
+    if (periodVal.indexOf('month:') === 0) {
+      const ym = ref.getFullYear() + '-' + String(ref.getMonth() + 1).padStart(2, '0');
+      return ym === periodVal.slice(6);
+    }
+    return true;
+  }
+
+  function applyFilters(deals, opts) {
+    opts = opts || {};
+    const owner = opts.excludeOwner ? '' : getVal('f-owner');
+    const periodVal = opts.excludePeriod ? '' : getVal('f-period');
+    const etapa = opts.excludeEtapa ? '' : getVal('f-etapa');
+    const qualidade = opts.excludeQualidade ? '' : getVal('f-qualidade');
+    const origem = opts.excludeOrigem ? '' : getVal('f-origem');
+    const ecommerce = opts.excludeEcommerce ? '' : getVal('f-ecommerce');
+
+    return deals.filter((d) => {
+      if (owner && d['Responsável'] !== owner) return false;
+      if (etapa && d['Etapa'] !== etapa) return false;
+      if (qualidade && concepts.qualidade && d[concepts.qualidade] !== qualidade) return false;
+      if (origem && concepts.origem && d[concepts.origem] !== origem) return false;
+      if (ecommerce && concepts.ecommerce && d[concepts.ecommerce] !== ecommerce) return false;
+      if (!matchesPeriod(d, periodVal)) return false;
+      return true;
+    });
+  }
+
+  function populateSelect(id, values, allLabel) {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    const current = sel.value;
+    sel.innerHTML = '<option value="">' + allLabel + '</option>' + values.map((v) => `<option value="${v}">${v}</option>`).join('');
+    if (values.indexOf(current) > -1) sel.value = current;
+  }
+
+  function toggleFilter(id, show) {
+    const el = document.getElementById(id);
+    if (el) el.style.display = show ? '' : 'none';
+  }
+
+  // Usa sempre "Data de criação" (= "Negócio - Negócio criado em") como
+  // referência. Agrupa por ano — cada ano vira um grupo no select, e dentro
+  // dele aparecem a opção "ano completo" e os meses daquele ano (só os que
+  // realmente existem nos dados), em ordem cronológica.
+  function setupPeriodFilter() {
+    const sel = document.getElementById('f-period');
+    if (!sel) return;
+    const current = sel.value;
+    const monthsByYear = {};
+    allDeals.forEach((d) => {
+      const ref = d['Data de criação'] ? new Date(d['Data de criação']) : null;
+      if (!ref || isNaN(ref)) return;
+      const y = String(ref.getFullYear());
+      const m = String(ref.getMonth() + 1).padStart(2, '0');
+      if (!monthsByYear[y]) monthsByYear[y] = new Set();
+      monthsByYear[y].add(m);
+    });
+    const years = Object.keys(monthsByYear).sort().reverse();
+
+    let html = '<option value="all">Todos os períodos</option>';
+    years.forEach((y) => {
+      const months = Array.from(monthsByYear[y]).sort();
+      html += '<optgroup label="' + y + '">';
+      html += `<option value="year:${y}">Ano completo</option>`;
+      months.forEach((m) => { html += `<option value="month:${y}-${m}">${monthNameOnly(y + '-' + m)}</option>`; });
+      html += '</optgroup>';
+    });
+    sel.innerHTML = html;
+
+    const validValues = Array.from(sel.options).map((o) => o.value);
+    let defaultVal = 'all';
+    if (years.length) {
+      const latestMonths = Array.from(monthsByYear[years[0]]).sort();
+      if (latestMonths.length) defaultVal = 'month:' + years[0] + '-' + latestMonths[latestMonths.length - 1];
+    }
+    sel.value = validValues.indexOf(current) > -1 ? current : defaultVal;
+  }
+
+  function setupFilters() {
+    setupPeriodFilter();
+
+    const ownersFound = Array.from(new Set(allDeals.map((d) => d['Responsável']).filter(Boolean))).sort();
+    populateSelect('f-owner', ownersFound, 'Todos os responsáveis');
+
+    const etapas = Array.from(new Set(allDeals.map((d) => d['Etapa']).filter(Boolean))).sort();
+    populateSelect('f-etapa', etapas, 'Todas as etapas');
+
+    toggleFilter('f-qualidade', !!concepts.qualidade);
+    if (concepts.qualidade) {
+      const vals = Array.from(new Set(allDeals.map((d) => d[concepts.qualidade]).filter(Boolean))).sort();
+      populateSelect('f-qualidade', vals, 'Qualidade: todas');
+    }
+    toggleFilter('f-origem', !!concepts.origem);
+    if (concepts.origem) {
+      const vals = Array.from(new Set(allDeals.map((d) => d[concepts.origem]).filter(Boolean))).sort();
+      populateSelect('f-origem', vals, 'Origem: todas');
+    }
+    toggleFilter('f-ecommerce', !!concepts.ecommerce);
+    if (concepts.ecommerce) {
+      const vals = Array.from(new Set(allDeals.map((d) => d[concepts.ecommerce]).filter(Boolean))).sort();
+      populateSelect('f-ecommerce', vals, 'E-commerce: todos');
+    }
+  }
+
+  function render() {
+    const deals = applyFilters(allDeals, {});
+    renderKPIs(deals);
+    renderLeadsPerDay(deals);
+    renderOrigemBlock(deals);
+    renderWeekdayOrigem(deals);
+    renderWeeklyChart(deals);
+    renderComparativo();
+    renderStatusEtapa(deals);
+    renderMotivoPerda(deals);
+    renderExtraCards(deals);
+    renderTable(deals);
+  }
+
+  function renderKPIs(deals) {
+    const cards = [
+      { label: 'Total de leads', num: String(deals.length), delta: 'no período filtrado' }
+    ];
+
+    if (concepts.qualidade) {
+      const total = deals.length;
+      const superior = deals.filter((d) => d[concepts.qualidade] === 'Superior').length;
+      const pct = total ? Math.round((superior / total) * 100) : 0;
+      cards.push({ label: 'Leads Superiores', num: superior + ' de ' + total, delta: pct + '% do total' });
+    }
+    if (concepts.ecommerce) {
+      const total = deals.length;
+      const simCount = deals.filter((d) => d[concepts.ecommerce] === 'Sim').length;
+      const naoCount = deals.filter((d) => d[concepts.ecommerce] === 'Não').length;
+      const naoInformado = total - simCount - naoCount;
+      cards.push({ label: 'Já possuem e-commerce', num: simCount + ' Sim  ·  ' + naoCount + ' Não', delta: naoInformado + ' não informado' });
+    }
+
+    document.getElementById('kpi-row').innerHTML = cards.map((c) => `
+      <div class="kpi-card">
+        <div class="kpi-label">${c.label}</div>
+        <div class="kpi-num">${c.num}</div>
+        <div class="kpi-delta">${c.delta}</div>
+      </div>`).join('');
+  }
+
+  function renderLeadsPerDay(deals) {
+    const periodVal = getVal('f-period');
+    const byDay = {};
+    deals.forEach((d) => {
+      const dt = d['Data de criação'];
+      if (!dt) return;
+      if (!byDay[dt]) byDay[dt] = { total: 0, superior: 0 };
+      byDay[dt].total++;
+      if (concepts.qualidade && d[concepts.qualidade] === 'Superior') byDay[dt].superior++;
+    });
+
+    let shortLabels, totals, superiores;
+    if (periodVal.indexOf('month:') === 0) {
+      // Mês específico selecionado: mostra todos os dias do mês, do 1 ao
+      // último dia, mesmo os que não tiveram nenhum lead (fica com 0).
+      const parts = periodVal.slice(6).split('-');
+      const year = Number(parts[0]); const month = Number(parts[1]) - 1;
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      shortLabels = []; totals = []; superiores = [];
+      for (let day = 1; day <= daysInMonth; day++) {
+        const key = year + '-' + String(month + 1).padStart(2, '0') + '-' + String(day).padStart(2, '0');
+        shortLabels.push(String(day).padStart(2, '0'));
+        totals.push(byDay[key] ? byDay[key].total : 0);
+        superiores.push(byDay[key] ? byDay[key].superior : 0);
+      }
+    } else {
+      // Ano completo ou "todos os períodos": mantém só os dias com dados,
+      // senão o eixo fica enorme (centenas de dias).
+      const labels = Object.keys(byDay).sort();
+      totals = labels.map((l) => byDay[l].total);
+      superiores = labels.map((l) => byDay[l].superior);
+      shortLabels = labels.map((l) => { const p = l.split('-'); return p[2] + '/' + p[1]; });
+    }
+
+    const datasets = [{ type: 'bar', label: 'Total', data: totals, backgroundColor: '#5b6478', borderRadius: 4, order: 2 }];
+    if (concepts.qualidade) datasets.push({ type: 'line', label: 'Superior', data: superiores, borderColor: '#f23740', backgroundColor: '#f23740', tension: 0.3, order: 1 });
+    drawChart('chart-leads-dia', 'bar', shortLabels, datasets);
+  }
+
+  function renderOrigemBlock(deals) {
+    const wrap = document.getElementById('origem-panel');
+    const col = concepts.origemMkt;
+    if (!col) { wrap.innerHTML = '<div class="hint">Nenhum campo "Origem MKT" detectado. Adicione esse campo no script de sincronização.</div>'; return; }
+    const map = groupByCount(deals, col, false);
+    const entries = topEntries(map, 8);
+    const max = Math.max(1, ...entries.map((e) => e[1]));
+    wrap.innerHTML = entries.map((e, i) => `
+      <div class="funnel-row">
+        <div class="funnel-label">${e[0]}</div>
+        <div class="funnel-bar-wrap"><div class="funnel-bar" style="width:${Math.max(6, Math.round((e[1] / max) * 100))}%;background:${PALETTE[i % PALETTE.length]}">${e[1]}</div></div>
+      </div>`).join('');
+  }
+
+  function renderWeekdayOrigem(deals) {
+    const wrap = document.getElementById('chart-weekday-origem-wrap');
+    const col = concepts.origemMkt;
+    if (!col) { wrap.innerHTML = '<div class="hint">Depende do campo "Origem MKT" (não detectado).</div>'; return; }
+    if (!document.getElementById('chart-weekday-origem')) wrap.innerHTML = '<canvas id="chart-weekday-origem" height="105"></canvas>';
+    const order = ['segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado', 'domingo'];
+    const origens = Array.from(new Set(deals.map((d) => d[col]).filter(Boolean)));
+    const matrix = {};
+    order.forEach((day) => { matrix[day] = {}; origens.forEach((o) => matrix[day][o] = 0); });
+    deals.forEach((d) => {
+      const day = weekdayName(d['Data de criação']);
+      if (!day || !matrix[day] || !d[col]) return;
+      matrix[day][d[col]] = (matrix[day][d[col]] || 0) + 1;
+    });
+    const datasets = origens.map((o, i) => ({
+      label: o,
+      data: order.map((day) => matrix[day][o] || 0),
+      backgroundColor: PALETTE[i % PALETTE.length]
+    }));
+    drawChart('chart-weekday-origem', 'bar', order.map((d) => d.slice(0, 3)), datasets, false, true);
+  }
+
+  // Semana do mês, contando de segunda a domingo: a semana 1 é a que contém
+  // o dia 1 do mês (mesmo que comece no meio da semana), a semana 2 é a
+  // primeira segunda-feira completa depois disso, e assim por diante.
+  // Como o índice é sempre relativo ao PRÓPRIO mês de cada lead, ao filtrar
+  // por um período maior (ex: um ano), as semanas de mesmo número em meses
+  // diferentes são somadas juntas (S1 de janeiro + S1 de fevereiro + ...).
+  function weekOfMonth(date) {
+    const day = date.getDate();
+    const firstOfMonth = new Date(date.getFullYear(), date.getMonth(), 1);
+    const firstWeekdayMon = (firstOfMonth.getDay() + 6) % 7; // 0=segunda ... 6=domingo
+    return Math.floor((day - 1 + firstWeekdayMon) / 7) + 1;
+  }
+
+  function renderWeeklyChart(deals) {
+    const withDate = deals.filter((d) => d['Data de criação']);
+    const byWeek = {};
+    withDate.forEach((d) => {
+      const dt = new Date(d['Data de criação']);
+      if (isNaN(dt)) return;
+      const key = 'S' + weekOfMonth(dt);
+      if (!byWeek[key]) byWeek[key] = { total: 0, superior: 0 };
+      byWeek[key].total++;
+      if (concepts.qualidade && d[concepts.qualidade] === 'Superior') byWeek[key].superior++;
+    });
+    const weeks = Object.keys(byWeek).sort((a, b) => Number(a.slice(1)) - Number(b.slice(1)));
+    const datasets = [{ label: 'Total', data: weeks.map((w) => byWeek[w].total), backgroundColor: '#7c9bff', borderRadius: 4 }];
+    if (concepts.qualidade) datasets.push({ label: 'Superior', data: weeks.map((w) => byWeek[w].superior), backgroundColor: '#ff6b6b', borderRadius: 4 });
+    drawChart('chart-weekly', 'bar', weeks, datasets, true, false, true);
+  }
+
+  function renderComparativo() {
+    const periodVal = getVal('f-period');
+    const base = applyFilters(allDeals, { excludePeriod: true });
+    const dateOf = (d) => { const dt = d['Data de criação'] ? new Date(d['Data de criação']) : null; return (dt && !isNaN(dt)) ? dt : null; };
+
+    if (periodVal.indexOf('year:') === 0) {
+      const year = Number(periodVal.slice(5));
+      const prevYear = year - 1;
+      const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+      const curData = monthNames.map((_, i) => base.filter((d) => { const dt = dateOf(d); return dt && dt.getFullYear() === year && dt.getMonth() === i; }).length);
+      const prevData = monthNames.map((_, i) => base.filter((d) => { const dt = dateOf(d); return dt && dt.getFullYear() === prevYear && dt.getMonth() === i; }).length);
+      drawChart('chart-comparativo', 'line', monthNames, [
+        { label: String(year), data: curData, borderColor: '#2bd9a5', backgroundColor: '#2bd9a5', tension: 0.3 },
+        { label: String(prevYear), data: prevData, borderColor: '#8b90a0', backgroundColor: '#8b90a0', tension: 0.3, borderDash: [4, 4] }
+      ]);
+      return;
+    }
+
+    let year, month;
+    if (periodVal.indexOf('month:') === 0) {
+      const parts = periodVal.slice(6).split('-');
+      year = Number(parts[0]); month = Number(parts[1]) - 1;
+    } else {
+      const now = new Date(); year = now.getFullYear(); month = now.getMonth();
+    }
+    const prevRef = new Date(year, month - 1, 1);
+    const prevYear = prevRef.getFullYear(); const prevMonth = prevRef.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const daysInPrevMonth = new Date(prevYear, prevMonth + 1, 0).getDate();
+    const totalDays = Math.max(daysInMonth, daysInPrevMonth);
+    const labels = Array.from({ length: totalDays }, (_, i) => String(i + 1));
+    const curData = labels.map((_, i) => {
+      const day = i + 1;
+      if (day > daysInMonth) return null;
+      return base.filter((d) => { const dt = dateOf(d); return dt && dt.getFullYear() === year && dt.getMonth() === month && dt.getDate() === day; }).length;
+    });
+    const prevData = labels.map((_, i) => {
+      const day = i + 1;
+      if (day > daysInPrevMonth) return null;
+      return base.filter((d) => { const dt = dateOf(d); return dt && dt.getFullYear() === prevYear && dt.getMonth() === prevMonth && dt.getDate() === day; }).length;
+    });
+    drawChart('chart-comparativo', 'line', labels, [
+      { label: monthLabel(year + '-' + String(month + 1).padStart(2, '0')), data: curData, borderColor: '#2bd9a5', backgroundColor: '#2bd9a5', tension: 0.3 },
+      { label: monthLabel(prevYear + '-' + String(prevMonth + 1).padStart(2, '0')), data: prevData, borderColor: '#8b90a0', backgroundColor: '#8b90a0', tension: 0.3, borderDash: [4, 4] }
+    ]);
+  }
+
+  function renderStatusEtapa(deals) {
+    const map = {};
+    deals.forEach((d) => {
+      const etapa = d['Etapa'] || 'Sem etapa';
+      map[etapa] = (map[etapa] || 0) + 1;
+    });
+    let etapas = Object.keys(map);
+    etapas.sort((a, b) => {
+      const ia = STAGE_ORDER.indexOf(a); const ib = STAGE_ORDER.indexOf(b);
+      if (ia === -1 && ib === -1) return 0;
+      if (ia === -1) return 1;
+      if (ib === -1) return -1;
+      return ia - ib;
+    });
+    const data = etapas.map((e) => map[e]);
+    drawChart('chart-status-etapa', 'pie', etapas, [{ data, backgroundColor: etapas.map((_, i) => PALETTE[i % PALETTE.length]), borderWidth: 0 }]);
+    document.getElementById('status-etapa-legend').innerHTML = etapas.map((e, i) => `
+      <div class="legend-item"><span class="legend-dot" style="background:${PALETTE[i % PALETTE.length]}"></span>${e} (${map[e]})</div>`).join('');
+  }
+
+  function renderMotivoPerda(deals) {
+    const lost = deals.filter((d) => d['Status'] === 'Perdido' && d['Motivo da Perda']);
+    const map = groupByCount(lost, 'Motivo da Perda', false);
+    const entries = topEntries(map, 8);
+    drawChart('chart-motivo-perda', 'doughnut', entries.map((e) => e[0]), [{ data: entries.map((e) => e[1]), backgroundColor: entries.map((_, i) => PALETTE[i % PALETTE.length]), borderWidth: 0 }]);
+    document.getElementById('motivo-legend').innerHTML = entries.map((e, i) => `
+      <div class="legend-item"><span class="legend-dot" style="background:${PALETTE[i % PALETTE.length]}"></span>${e[0]} (${e[1]})</div>`).join('');
+  }
+
+  const EXTRA_CARD_EXCLUDE = ['Criado por', '% Mensalidade', 'Valor Setup', 'Faturamento Mensal Loja Online', 'Faturamento Marketplace', 'Qualidade Lead', 'Faturamento MKT'];
+
+  function renderExtraCards(deals) {
+    const consumed = new Set(FIXED_COLUMNS.concat([concepts.origem, concepts.origemMkt], EXTRA_CARD_EXCLUDE).filter(Boolean));
+    const extras = detectedColumns.filter((c) => !consumed.has(c));
+    const container = document.getElementById('extra-cards');
+    if (!extras.length) { container.innerHTML = '<div class="hint">Nenhum campo extra de qualificação detectado ainda.</div>'; return; }
+    const cardsHtml = extras.map((col, idx) => {
+      const mode = decideRenderMode(deals, col);
+      if (mode === 'skip') return '';
+      const map = mode === 'money' ? bucketMoney(deals, col) : groupByCount(deals, col, true);
+      const entries = mode === 'money' ? Object.entries(map).filter((e) => e[1] > 0) : topEntries(map, 6);
+      if (!entries.length) return '';
+      const max = Math.max(1, ...entries.map((e) => e[1]));
+      const color = PALETTE[idx % PALETTE.length];
+      const rowsHtml = entries.map((e) => `
+        <div class="funnel-row">
+          <div class="funnel-label">${e[0]}</div>
+          <div class="funnel-bar-wrap"><div class="funnel-bar" style="width:${Math.max(6, Math.round((e[1] / max) * 100))}%;background:${color}">${e[1]}</div></div>
+        </div>`).join('');
+      return `<div class="panel"><h2>${col}</h2>${rowsHtml}</div>`;
+    }).filter(Boolean).join('');
+    container.innerHTML = cardsHtml || '<div class="hint">Os campos extras encontrados (e-mails, site, datas de atividade...) não são categorias úteis para gráfico — por isso não aparecem aqui.</div>';
+  }
+
+  function drawChart(canvasId, type, labels, datasets, horizontal, stacked, showDataLabels) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    if (charts[canvasId]) charts[canvasId].destroy();
+    const ctx = canvas.getContext('2d');
+    const isCircular = type === 'doughnut' || type === 'pie';
+    const scales = isCircular ? {} : {
+      x: { stacked: !!stacked, ticks: { color: '#939aad', font: { size: 11 } }, grid: { color: '#383b4a' } },
+      y: { stacked: !!stacked, ticks: { color: '#939aad', font: { size: 11 } }, grid: { color: '#383b4a' } }
+    };
+    charts[canvasId] = new Chart(ctx, {
+      type,
+      data: { labels, datasets },
+      options: {
+        indexAxis: horizontal ? 'y' : 'x',
+        aspectRatio: isCircular ? 1 : undefined,
+        plugins: {
+          legend: { display: (type === 'bar' && datasets.length > 1), labels: { color: '#939aad', font: { size: 11 } } },
+          datalabels: showDataLabels ? {
+            display: (ctx2) => ctx2.dataset.data[ctx2.dataIndex] > 0,
+            color: '#f0f0f0',
+            font: { size: 11, weight: '600' },
+            anchor: horizontal ? 'end' : 'end',
+            align: horizontal ? 'end' : 'top',
+            formatter: (v) => v
+          } : { display: false }
+        },
+        scales
+      }
+    });
+  }
+
+  function renderTable(deals) {
+    document.getElementById('table-title').textContent = 'Negócios (' + deals.length + ')';
+    const rows = deals.slice(0, 200).map((d) => `
+      <tr>
+        <td>${d['Título'] || ''}</td>
+        <td>${d['Responsável'] || ''}</td>
+        <td>${d['Etapa'] || ''}</td>
+        <td><span class="badge ${d['Status']}">${d['Status'] || ''}</span></td>
+        <td>${fmtBRL(parseMoney(d['Valor']))}</td>
+        <td>${d['Data de criação'] || '—'}</td>
+      </tr>`).join('');
+    document.getElementById('table-body').innerHTML = rows || '<tr><td colspan="6" style="color:var(--text-muted)">Nenhum deal encontrado com esses filtros.</td></tr>';
+  }
+
+  function setStatus(text, live) {
+    document.getElementById('pdash-status-text').textContent = text;
+    document.getElementById('pdash-dot').classList.toggle('live', !!live);
+  }
+
+  // Nomes alternativos que o próprio Pipedrive costuma usar na exportação,
+  // para reconhecer as colunas estruturais mesmo que o cabeçalho não seja
+  // idêntico ao esperado. A exportação normalmente vem como "Negócio - Campo",
+  // "Organização - Campo" ou "Pessoa - Campo" — esse prefixo é removido antes
+  // de comparar com esta lista.
+  const CORE_ALIASES = {
+    'Título': ['Título', 'Title', 'Deal Title'],
+    'Valor': ['Valor', 'Value', 'Deal Value'],
+    'Moeda': ['Moeda', 'Currency'],
+    'Etapa': ['Etapa', 'Stage'],
+    'Status': ['Status'],
+    'Responsável': ['Responsável', 'Proprietário', 'Owner', 'Owner Name'],
+    'Motivo da Perda': ['Motivo da Perda', 'Motivo da perda', 'Lost reason'],
+    'Data de criação': ['Data de criação', 'Data de Criação', 'Negócio criado em', 'Criado em', 'Created', 'Add Time'],
+    'Data prevista de fechamento': ['Data prevista de fechamento', 'Expected close date'],
+    'Data de fechamento': ['Data de fechamento', 'Ganho em', 'Won time', 'Close Time', 'Lost time']
+  };
+  const STATUS_VALUE_MAP = { open: 'Aberto', won: 'Ganho', lost: 'Perdido' };
+  const OBJECT_PREFIX_RE = /^(Negócio|Organização|Pessoa|Deal|Organization|Person|Contact)\s*-\s*/i;
+
+  function stripObjectPrefix(h) {
+    return String(h).replace(OBJECT_PREFIX_RE, '').trim();
+  }
+
+  // Para cada cabeçalho bruto, decide o nome final: o nome canônico (se
+  // reconhecido como campo estrutural) ou o nome "limpo" (sem o prefixo do
+  // objeto), que vira uma coluna extra detectada automaticamente.
+  function buildHeaderMap(rawHeaders) {
+    const map = {};
+    rawHeaders.forEach((raw) => {
+      const stripped = stripObjectPrefix(raw);
+      const strippedLower = stripped.toLowerCase();
+      let canonical = null;
+      for (const c of Object.keys(CORE_ALIASES)) {
+        if (CORE_ALIASES[c].some((a) => a.trim().toLowerCase() === strippedLower)) { canonical = c; break; }
+      }
+      map[raw] = canonical || stripped;
+    });
+    return map;
+  }
+
+  function excelDateToStr(v) {
+    if (v instanceof Date && !isNaN(v)) return v.toISOString().slice(0, 10);
+    if (typeof v !== 'string' || !v.trim()) return v;
+    const s = v.trim();
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+    // dd/mm/yyyy ou dd/mm/yy (padrão brasileiro) — convertido para ISO
+    // explicitamente para não deixar o JS interpretar como mm/dd (padrão EUA).
+    const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+    if (m) {
+      let day = m[1], month = m[2], year = m[3];
+      if (year.length === 2) year = '20' + year;
+      return year + '-' + month.padStart(2, '0') + '-' + day.padStart(2, '0');
+    }
+    return s;
+  }
+
+  function normalizeRows(rawRows) {
+    if (!rawRows.length) return [];
+    const headerMap = buildHeaderMap(Object.keys(rawRows[0]));
+    return rawRows.map((raw) => {
+      const out = {};
+      Object.keys(raw).forEach((rawKey) => {
+        let value = raw[rawKey];
+        const finalName = headerMap[rawKey];
+        if (finalName.indexOf('Data') === 0) value = excelDateToStr(value);
+        if (finalName === 'Status' && typeof value === 'string') {
+          const mapped = STATUS_VALUE_MAP[value.trim().toLowerCase()];
+          if (mapped) value = mapped;
+        }
+        out[finalName] = value === undefined || value === null ? '' : value;
+      });
+      return out;
+    });
+  }
+
+  function parseFile(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      const isCsv = /\.csv$/i.test(file.name);
+      reader.onerror = () => reject(new Error('Não consegui ler o arquivo.'));
+      reader.onload = () => {
+        try {
+          if (isCsv) {
+            const parsed = Papa.parse(reader.result, { header: true, skipEmptyLines: true });
+            resolve(normalizeRows(parsed.data));
+          } else {
+            const wb = XLSX.read(reader.result, { type: 'array', cellDates: true });
+            const sheet = wb.Sheets[wb.SheetNames[0]];
+            const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+            resolve(normalizeRows(rows));
+          }
+        } catch (e) {
+          reject(new Error('Não consegui interpretar o arquivo. Confirme se é um export do Pipedrive em Excel ou CSV.'));
+        }
+      };
+      if (isCsv) reader.readAsText(file, 'utf-8');
+      else reader.readAsArrayBuffer(file);
+    });
+  }
+
+  // Agrupa variações de origem que representam a mesma coisa, ex:
+  // "Case | PJ Neblina" e "Case | Drogão Super" → "Case";
+  // "Ligação" e "Telefone" → "Telefone".
+  function normalizeOrigemValue(v) {
+    if (v === undefined || v === null || v === '') return v;
+    const s = String(v);
+    if (/case/i.test(s)) return 'Case';
+    if (/liga(ç|c)(ã|a)o/i.test(s) || /telefone/i.test(s)) return 'Telefone';
+    return s;
+  }
+
+  function setup(deals) {
+    allDeals = deals;
+    detectedColumns = detectHeaders(allDeals);
+    concepts = detectConcepts(detectedColumns);
+    if (concepts.origem) allDeals.forEach((d) => { d[concepts.origem] = normalizeOrigemValue(d[concepts.origem]); });
+    setupFilters();
+    render();
+  }
+
+  function useMockData() {
+    setup(EMBEDDED_SNAPSHOT_DATA.length ? EMBEDDED_SNAPSHOT_DATA : genMockDeals());
+    if (EMBEDDED_SNAPSHOT_DATA.length) {
+      setStatus('instantâneo', false);
+      document.getElementById('pdash-file-info').textContent = allDeals.length + ' negócios (instantâneo de "' + EMBEDDED_SNAPSHOT_LABEL + '").';
+    } else {
+      setStatus('dados de exemplo', false);
+      document.getElementById('pdash-file-info').textContent = 'Suba um arquivo exportado do Pipedrive para ver os dados.';
+    }
+    document.getElementById('file-name').textContent = '';
+  }
+
+  async function handleFile(file, silent) {
+    const errBox = document.getElementById('config-error');
+    errBox.innerHTML = '';
+    try {
+      const deals = await parseFile(file);
+      if (!deals.length) throw new Error('O arquivo foi lido, mas não encontrei nenhuma linha de dados.');
+      setup(deals);
+      setStatus('carregado — ' + new Date().toLocaleTimeString('pt-BR').slice(0, 5), true);
+      document.getElementById('pdash-file-info').textContent = allDeals.length + ' negócios carregados de "' + file.name + '" (só neste navegador).';
+      document.getElementById('file-name').textContent = file.name;
+    } catch (e) {
+      if (!silent) errBox.innerHTML = '<div class="error-box">' + e.message + '</div>';
+      else useMockData();
+    }
+  }
+
+  document.getElementById('file-upload').addEventListener('change', (ev) => {
+    const file = ev.target.files && ev.target.files[0];
+    if (file) handleFile(file, false);
+  });
+  document.getElementById('btn-reset').addEventListener('click', () => {
+    document.getElementById('file-upload').value = '';
+    useMockData();
+  });
+  document.getElementById('btn-refresh').addEventListener('click', render);
+  ['f-owner', 'f-period', 'f-etapa', 'f-qualidade', 'f-origem', 'f-ecommerce'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('change', render);
+  });
+
+  useMockData();
+})();
+</script>
